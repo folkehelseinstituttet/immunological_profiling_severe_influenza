@@ -1,0 +1,44 @@
+#cytof analyse
+The cleaned data is first analysed using FlowSOM.
+
+The file "runFlowSOM_analyse.R" source the "FlowSOM_analyse.R" file for different seeds and save the result of the analysis.
+Paths and markers used for flowSOM has to be updated before use.
+
+Manual gated for panel1 (unstimulated panel) is found from "Manuel_manuelGatingP1.R" which use results from marker gating performed 
+and restulting posNeg matrix. 
+
+
+The file runResultatRegresjonNegBinFraFlowSOM.R source the files resultater_Regression_negbin_manuel_manuel.Rmd and
+resultater_Regression_negbin_fraFlowSOM.Rmd for different seeds and different comparison. Only the significant result between the first to 
+status_timepoint are saved for each run. Paths have to be changed, and  resultater_Regression_negbin_manuel_manuel.Rmd and
+resultater_Regression_negbin_fraFlowSOM.Rmd has to be updated to the research question and covariates used in the analysis. The file
+resultater_Regression_negbin_fraFlowSOM.Rmd also find the clusters from different clusterings that are not similar and will be tested for 
+significans.
+
+like_klustrePanel1_095.R and like_klustrePanel2_095.R compare the results from different runs to find clusters that similar. The similarity
+is also plotted in markerplots to visually conferm the findings. 
+
+then a seed for each panel with all clusters found was chosen to report the findings. for these seeds markerplot, tSNE and result from 
+negative binomial regression was visualized using the scripts
+
+P1_tSNE_lagFig.R
+P2_tSNE_lagFig.R
+
+P1markerplotTid1.R
+P1markerplotTidAlle.R
+P1markerplotTidAlle_alle92_v2etterJBnavn.R
+P2markerplotTid1.R
+P2markerplotTidAlle.R
+P2markerplotTidAlle_alle85_v2etterJBnavn.R
+
+figPanel1_T1_unsup_kun_strek_kort_navn.Rmd
+figPanel2_T1_unsup_kun_strek_kort_navn.Rmd
+figP1_T1_man_man.Rmd
+
+the incidence rate ratio results from all comparisons made was visualized using signCytofPlot.R
+
+
+
+
+
+ 

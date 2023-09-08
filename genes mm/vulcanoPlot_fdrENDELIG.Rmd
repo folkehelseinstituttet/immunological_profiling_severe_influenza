@@ -1,0 +1,938 @@
+---
+title: "Vulcanoplot"
+author: "Anja Bråthen Kristoffersen"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r include = F}
+knitr::kable(paste0("date: ", Sys.Date()))
+
+library(reshape2)
+library(ggplot2)
+library(psych)
+library(ggrepel)
+library(censReg)
+
+utSti <- fs::path("F:", "Forskningsprosjekter", "PDB 2794 - Immune responses aga_", "Forskningsfiler", "JOBO", "CyTOF", "Analyse i R OUS", "CleanUpGatingMarch2022", "Analyse", "Endelig", "Figurer")
+
+dataSti <- "F:/Forskningsprosjekter/PDB 2794 - Immune responses aga_/Forskningsfiler/Datafiler/"
+#utSti <- "F:/Forskningsprosjekter/PDB 2794 - Immune responses aga_/Forskningsfiler/ABRK/FigurerKorrelasjon/"
+dat1 <- read.csv2("F:/Forskningsprosjekter/PDB 2794 - Immune responses aga_/Forskningsfiler/Datafiler/MergedDataT1.csv")
+dat2 <- read.csv2("F:/Forskningsprosjekter/PDB 2794 - Immune responses aga_/Forskningsfiler/Datafiler/MergedDataT2.csv")
+dKont <- read.csv2("F:/Forskningsprosjekter/PDB 2794 - Immune responses aga_/Forskningsfiler/Datafiler/NederlandKOntroll.csv")
+
+
+gener <- colnames(dat1)[which(colnames(dat1) == "AIRE"): which(colnames(dat1) == "ZNF532")]
+# dGenGrupper <- as.data.frame(readxl::read_excel("F:/Forskningsprosjekter/PDB 2794 - Immune responses aga_/Forskningsfiler/Data fra Nederland April 2020/Table_List of target genes og refs for dcRT-MLPA.xlsx", skip = 2))
+
+#length(dat2$Pasientnr[dat2$Pasientnr %in% dat1$Pasientnr])
+
+# dGenGrupper$Gene[which(!dGenGrupper$Gene %in% colnames(dat1))]
+# #disse må endres navn på
+# colnames(dat1)[grep("PTPRC", colnames(dat1))]
+# colnames(dat1)[grep("IL4", colnames(dat1))]
+# colnames(dat1)[grep("CD274", colnames(dat1))]
+# colnames(dat1)[grep("IFIT", colnames(dat1))]
+# 
+# dGenGrupper$Gene[dGenGrupper$Gene == "PTPRCv1/CD45RA"] <- "PTPRCv1"
+# dGenGrupper$Gene[dGenGrupper$Gene == "PTPRCv2/CD45RO"] <- "PTPRCv2"
+# dGenGrupper$Gene[grep("IL4", dGenGrupper$Gene)[2]] <- "IL4d2"
+# dGenGrupper$Gene[dGenGrupper$Gene == "CD274/PD-L1"] <- "CD274"
+# dGenGrupper$Gene[dGenGrupper$Gene == "IFITM1/3"] <- "IFITM1.3"
+# 
+# dGenGrupper$Gene[which(!dGenGrupper$Gene %in% colnames(dat1))]
+# 
+# for(i in 1:nrow(dGenGrupper)){
+#   if(is.na(dGenGrupper$Module[i])){
+#     dGenGrupper$Module[i] <- dGenGrupper$Module[i-1]
+#   }
+# }
+
+# utvalgteGrupper <- c("Immune cell subset markers - B cells", "T cell subset markers", "Th1 associated genes", "Th2 associated genes", "Th17 associated genes", "Treg associated genes", "Cytotoxicity markers", "Myeloid associated genes", "IFN signaling genes" )
+# 
+# dGenGrupper$utvalgteGener <- dGenGrupper$Module %in% utvalgteGrupper
+# nUtvalgt <- sum(dGenGrupper$utvalgteGener)
+# 
+# 
+# dGenGrupper <- dGenGrupper[1:144,] #tar ut householder gene
+# gener <- dGenGrupper$Gene[!grepl("Housekeeping", dGenGrupper$Module)]
+# 
+# 
+# dat1$crbny <- dat1$Mental + I(dat1$Resp > 29) + I(dat1$Syst.BT < 90) + I(dat1$Diast.BT < 61)
+# dat1$crb.alvor <- dat1$crbny > 0
+# #table(dat1$crb.alvor)
+
+
+dat1$Dager.innlagtFlerEnn4 <- 0
+dat1$Dager.innlagtFlerEnn4[dat1$`Dager innlagt` > 4] <- 1
+dat1$OxPnem5D <- apply(dat1[,c("Ox", "Pneumoniinfilt", "Dager.innlagtFlerEnn4")], 1, sum)
+
+dat1$alvorligSykModSept2020 <- 0
+dat1$alvorligSykModSept2020[dat1$OxPnem5D == 3 ] <- 4
+dat1$alvorligSykModSept2020[dat1$OxPnem5D == 2 ] <- 3
+dat1$alvorligSykModSept2020[dat1$OxPnem5D == 1 ] <- 2
+dat1$alvorligSykModSept2020[dat1$OxPnem5D == 0 ] <- 1
+dat1$alvorligSykModSept2020[dat1$Intensiv == 1] <- 5  #1 = ja, 2 = nei
+
+dat1$Status <- "Moderate"
+dat1$Status[dat1$alvorligSykModSept2020 > 2] <- "Severe"
+
+
+
+
+
+dat2$crbny <- dat2$Mental + I(dat2$Resp > 29) + I(dat2$Syst.BT < 90) + I(dat2$Diast.BT < 61)
+dat2$crb.alvor <- dat2$crbny > 0
+#table(dat1$crb.alvor)
+
+dat2$Dager.innlagtFlerEnn4 <- 0
+dat2$Dager.innlagtFlerEnn4[dat2$`Dager innlagt` > 4] <- 1
+dat2$OxPnem5D <- apply(dat2[,c("Ox", "Pneumoniinfilt", "Dager.innlagtFlerEnn4")], 1, sum)
+
+dat2$alvorligSykModSept2020 <- 0
+dat2$alvorligSykModSept2020[dat2$OxPnem5D == 3 ] <- 4
+dat2$alvorligSykModSept2020[dat2$OxPnem5D == 2 ] <- 3
+dat2$alvorligSykModSept2020[dat2$OxPnem5D == 1 ] <- 2
+dat2$alvorligSykModSept2020[dat2$OxPnem5D == 0 ] <- 1
+dat2$alvorligSykModSept2020[dat2$Intensiv == 1] <- 5  #1 = ja, 2 = nei
+
+dat2$Status <- "Moderate"
+dat2$Status[dat2$alvorligSykModSept2020 > 2] <- "Severe"
+
+
+
+dat1$bakterieFunn <- !is.na(dat1$Bakt1) | !is.na(dat1$Bakt2)
+dat2$bakterieFunn <- !is.na(dat2$Bakt1) | !is.na(dat2$Bakt2)
+#dat1$posluftvei <- ( dat1$Ekspektorat == 1 )| ( dat1$Nasopharynx == 1)
+```
+
+
+```{r, echo = F, fig.width=5, fig.height=5}
+pVerdiStjerne <- function(p){
+  if(p < 0.001){
+    return("***")
+  } else {
+    if(p < 0.01){
+      return("**")
+    } else { 
+      if(p < 0.05){
+        return("*")
+      } else {
+        return("-")
+      }
+    }
+  }
+}
+
+
+plotPerGenT1T2 <- function(x, y, z, tittel = "", miny, maxy){
+  pverdixy <- pVerdiStjerne(wilcox.test(x,y, paired = T)$p.value)
+  pverdixz <- pVerdiStjerne(wilcox.test(x,z)$p.value)
+  pverdiyz <- pVerdiStjerne(wilcox.test(y,z)$p.value)
+  
+  boxplot(x,y,z, label = c("T1", "T2", "Friske"), ylim = c(miny, maxy), main = tittel)
+  points(rep(1, length(x)), x)
+  axis(2)
+  axis(1, at = c(1,2,3), label = c("T1", "T2", "Friske"))
+  points(rep(2, length(y)),y)
+  for(i in 1:length(x)){
+    lines(c(1,2),c(x[i], y[i]), col = ((x[i] - y[i]) > 0) + 2) 
+  }
+  points(rep(3, length(z)), z)
+  legend("topleft", col = c(2,3), legend = table((x-y > 0)), lty  = 1, bty = "n")
+  legend("topright", lty = 1, col = "white", legend = c("***, p < 0.001", " **, p < 0.01", "  *, p < 0.05", "  -, p > 0.05"))
+  text(x = 1.5, y = maxy - 1.65, pverdixy)
+  lines(c(1, 2), c(maxy -1.75,maxy - 1.75))
+  text(x = 2.5, y = maxy - 1.45, pverdiyz)
+  lines(c(2, 3), c(maxy -1.55,maxy - 1.55))
+  text(x = 2, y = maxy - 1.25, pverdixz)
+  lines(c(1, 3), c(maxy -1.35,maxy - 1.35))
+}
+
+
+plotPerGenISamme <- function(x, y, z, IDx2, IDy2, IDx3, IDy3, tittel1, tittel2, tittel3){
+  miny <- min(c(x,y,z))
+  maxy <- max(c(x,y,z) + 2)
+
+  par(mfrow = c(1,3))
+  plotPerGenT1T2(x, y, z, tittel1, miny, maxy)
+  plotPerGenT1T2(x[IDx2], y[IDy2], z, tittel2, miny, maxy)
+  plotPerGenT1T2(x[IDx3], y[IDy3], z, tittel3, miny, maxy)
+}
+
+
+```
+
+
+```{r, include = F}
+#tar ut de med antall sykedager før T1 som her fler enn 10:
+#table(dat1$Sykedager.før.T1 < 11)
+```
+
+```{r, include=F}
+minst5prosent <- function(x){
+  y <- x[x>min(x)]
+  return(length(y)/length(x) > 0.05)
+}
+```
+
+```{r, include = F, fig.width= 14, fig.height=18}
+#dat1 <- dat1[dat1$Sykedager.før.T1 < 11,]
+dat1.gener <- dat1[,gener]
+dim(dat1.gener)
+GenerMed <- apply(dat1.gener, 2, minst5prosent)
+dat1.gener <- dat1.gener[,GenerMed]
+dim(dat1.gener)
+
+
+#dat2 <- dat2[dat2$Sykedager.før.T1 < 11, ]
+dat2.gener <- dat2[,gener]
+dat2.gener <- dat2.gener[,GenerMed]
+#which(!apply(dat2.gener, 2, minst5prosent))
+# apply(dat2.gener[,which(!apply(dat2.gener, 2, minst5prosent))], 2, sd)
+
+dKont.gener <- dKont[,gener]
+dKont.gener <- dKont.gener[,GenerMed]
+#which(!apply(dKont.gener, 2, minst5prosent))
+
+# apply(dKont.gener[,which(!apply(dKont.gener, 2, minst5prosent))], 2, sd)
+
+# par(mfrow = c(5,3))
+# for(i in 1:nrow(dat1.gener)){
+#   hist(dat1.gener[,i], main = colnames(dat1.gener[i]))
+# }
+
+
+PasientT1T2 <- as.character(dat1$Patient_ID[dat1$Patient_ID %in% dat2$Patient_ID])
+rownames(dat1.gener) <- as.character(dat1$Patient_ID)
+rownames(dat2.gener) <- as.character(dat2$Patient_ID)
+rownames(dat1) <- as.character(dat1$Patient_ID)
+rownames(dat2) <- as.character(dat2$Patient_ID)
+
+```
+
+
+```{r, echo=FALSE}
+vulcanoPlot <- function(X, Y, logTrans = TRUE, pairwise = FALSE, main = ""){
+  
+  n <- ncol(X)
+  if(!ncol(Y) == n){
+    knitr::kable("need as equaly many coloums in the two matrixes of log data")
+  }
+  if(logTrans == FALSE){
+    X <- log2(X)
+    Y <- log2(Y)
+  } 
+  #browser()
+ 
+#   log2FoldCh <- apply(X, 2, median) - apply(Y, 2, median)
+#   pvalue <- rep(NA, n)
+#   for(i in 1:n){
+#     pvalue[i] <- wilcox.test(X[,i], Y[,i], paired = pairwise)$p.value
+#   }
+#   adj.p.val <- p.adjust(pvalue, method = "fdr")
+#   
+#   diffexp <- NA
+#   de <- data.frame(log2FoldChange = log2FoldCh, adj.p.value = adj.p.val)
+#   de$logadj <- -log10(de$adj.p.value)
+#   
+#   de$diffexpressed <- "NO"
+#   # if log2Foldchange > 0.6 and pvalue < 0.05, set as "UP" 
+#   de$diffexpressed[de$log2FoldChange > 0.6 & de$adj.p.value < 0.05] <- "UP"
+#   # if log2Foldchange < -0.6 and pvalue < 0.05, set as "DOWN"
+#   de$diffexpressed[de$log2FoldChange < -0.6 & de$adj.p.value < 0.05] <- "DOWN"
+#   
+#   de$delabel <- NA
+#   de$delabel[de$diffexpressed != "NO"] <- rownames(de)[de$diffexpressed != "NO"]
+# 
+#  
+#   cols <- c("DOWN" = "blue", "NO" = "black", "UP" = "red")
+#   
+# 
+#  aktuelleGener <- de[de$diffexpressed != "NO",]
+# aktuelleGener$adj.p.value <- round(aktuelleGener$adj.p.value, 4)
+#     gg <- ggplot(data=de, aes(x = log2FoldChange, y = -log10(adj.p.value), col = diffexpressed, label = delabel)) +   
+#  #    gg <- ggplot(data=de, aes(x = log2FoldChange, y = adj.p.value, col = diffexpressed, label = delabel)) +
+#         geom_point() + 
+#         theme_minimal() +
+#         geom_text_repel() +
+#       theme_classic(base_size = 15) +
+#         scale_color_manual(values=cols) +
+#         geom_vline(xintercept=c(-0.6, 0.6), col="red") +
+#         geom_hline(yintercept=-log10(0.05), col="red") + ylim(0,16) + xlim(-4,4) +
+#         ggtitle(main)# +
+#       #  scale_y_log10() 
+#     
+#     
+    
+    
+    
+  log2FoldCh <- apply(X, 2, median) - apply(Y, 2, median)
+  pvalue <- rep(NA, n)
+  for(i in 1:n){
+    pvalue[i] <- wilcox.test(X[,i], Y[,i], paired = pairwise)$p.value
+  }
+  adj.p.val <- p.adjust(pvalue, method = "fdr")
+  
+  diffexp <- NA
+  de <- data.frame(FoldChange = 2^log2FoldCh, adj.p.value = adj.p.val)
+  de$logadj <- -log10(de$adj.p.value)
+  
+  de$diffexpressed <- "NO"
+  # if log2Foldchange > 0.6 and pvalue < 0.05, set as "UP" 
+  de$diffexpressed[de$FoldChange > 2^0.6 & de$adj.p.value < 0.05] <- "UP"
+  # if log2Foldchange < -0.6 and pvalue < 0.05, set as "DOWN"
+  de$diffexpressed[de$FoldChange < 2^(-0.6) & de$adj.p.value < 0.05] <- "DOWN"
+  
+  de$delabel <- NA
+  de$delabel[de$diffexpressed != "NO"] <- rownames(de)[de$diffexpressed != "NO"]
+
+ 
+  cols <- c("DOWN" = "blue", "NO" = "black", "UP" = "red")
+  
+
+ aktuelleGener <- de[de$diffexpressed != "NO",]
+aktuelleGener$adj.p.value <- round(aktuelleGener$adj.p.value, 4)
+    gg <- ggplot(data=de, aes(x = FoldChange, y = -log10(adj.p.value), col = diffexpressed, label = delabel)) +   
+ #    gg <- ggplot(data=de, aes(x = log2FoldChange, y = adj.p.value, col = diffexpressed, label = delabel)) +
+        geom_point() + 
+        theme_minimal() +
+        geom_text_repel( max.overlaps = Inf, size = 5) +
+      theme_classic(base_size = 25) +
+        scale_color_manual(values=cols) +
+      #   geom_vline(xintercept=2^c(-0.6, 0.6), col="red") +
+      #   geom_hline(yintercept=-log10(0.05), col="red") + 
+       ylim(0,16) + xlim(-4,4) +
+        ggtitle(main) +
+       coord_trans(x="log2", xlim = c(0.03,16)) +
+ #   scale_x_continuous(breaks = c(0.063, 0.125, 0.25, 0.5, 1, 2, 4, 8, 16)) + 
+    scale_x_continuous(breaks = c(0.063, 0.125, 0.25, 0.5, 1, 2, 4, 8, 16)) + 
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+      #  scale_y_log10() 
+
+  return(list(gg = gg, aktuelleGener = aktuelleGener, d = de))
+}
+
+# slettt
+# gg <- ggplot(d2, aes(x= IRR, y = -log10(adj.p.value), col = diff, label = kort_navn)) + 
+#     geom_point() + xlab("Incident rate ratio") +
+#     theme_minimal() +
+#     geom_text_repel() +
+#     theme_classic(base_size = 15) +
+#     scale_color_manual(values=cols) +
+#     geom_vline(xintercept=c(2^-0.6, 2^0.6), col="red") +
+#     ggtitle(main) + 
+#     theme(legend.position = "none") + 
+#     ylim(0,ymax) +  coord_trans(x="log2", xlim = c(0.03,30)) +
+#     scale_x_continuous(breaks = c(0.063, 0.125, 0.25, 0.5, 1, 2, 4, 8, 16)) + 
+#     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+ 
+```
+
+
+```{r, echo=FALSE, warning= FALSE}
+# all data
+
+## paired time 1 and time 2
+# fellesGener <- colnames(dat1.gener)[colnames(dat1.gener) %in% colnames(dat2.gener)]
+# fellesID <- dat1$Pasientnr[dat1$Pasientnr %in% dat2$Pasientnr]
+# d1 <- dat1[dat1$Pasientnr %in% fellesID,]
+# d2 <- dat2[dat2$Pasientnr %in% fellesID,]
+# 
+# d1 <- d1[order(d1$Pasientnr), fellesGener]
+# d2 <- d2[order(d2$Pasientnr), fellesGener]
+# 
+# v <- vulcanoPlot(d1, d2[,fellesGener], main = "T1 vs T2, paired", pairwise = TRUE)
+# v$gg
+# 
+# tiff(fs::path(utSti, "vulcanoplot T1_T2 paired.tiff"), width = 500, height = 700)
+#  v$gg + theme(legend.position = "none")
+# dev.off()
+# gT1T2parret <-  v$gg + theme(legend.position = "none")
+# OppNedT1T2_parret <- v$aktuelleGener
+# knitr::kable(OppNedT1T2_parret)
+```
+
+
+
+```{r, echo=FALSE, warning= FALSE}
+## time 1 and controls 
+# fellesGener <- colnames(dat1.gener)[colnames(dat1.gener) %in% colnames(dKont.gener)]
+# 
+# v <- vulcanoPlot(dat1.gener[,fellesGener], dKont.gener[,fellesGener], main = "T1 vs controls")
+# v$gg
+# OppNedT1Kont <- v$aktuelleGener
+# knitr::kable(OppNedT1Kont)
+# 
+# tiff(fs::path(utSti, "vulcanoplot T1_control.tiff"), width = 500, height = 700)
+#  v$gg + theme(legend.position = "none")
+# dev.off()
+# gT1C <-  v$gg + theme(legend.position = "none")
+
+
+```
+
+
+```{r, echo=FALSE, warning= FALSE}
+## time 2 and controls
+# fellesGener <- colnames(dat2.gener)[colnames(dat2.gener) %in% colnames(dKont.gener)]
+# 
+# v <- vulcanoPlot(dat2.gener[,fellesGener], dKont.gener[,fellesGener], main = "T2 vs controls")
+# v$gg
+# OppNedT2Kont <- v$aktuelleGener
+# knitr::kable(OppNedT2Kont)
+# 
+# tiff(fs::path(utSti, "vulcanoplot T2_control.tiff"), width = 500, height = 700)
+#  v$gg + theme(legend.position = "none")
+# dev.off()
+# 
+# gT2C <-  v$gg + theme(legend.position = "none")
+
+```
+
+
+
+```{r, echo=FALSE, warning= FALSE}
+#install.packages("ggVennDiagram")
+library(ggVennDiagram)
+# x <- list("T1vsC" = OppNedT1Kont$delabel,
+#           "T1vsT2" = OppNedT1T2_parret$delabel,
+#           "T2vsC" = OppNedT2Kont$delabel)
+# 
+# gvenn <- ggVennDiagram(x) + scale_color_brewer(palette = "Paired") + scale_x_continuous(expand = expansion(mult = .2))
+# gvenn
+# tiff(fs::path(utSti, "venn_T1_T2_C.tiff"), width = 700, height = 700)
+# gvenn
+# dev.off()
+```
+
+
+
+```{r, echo=FALSE, warning= FALSE}
+library(ggpubr)
+
+# tiff(fs::path(utSti, "Alle_venn_T1_T2_C.tiff"), width = 1500, height = 700)
+# ggarrange(gT1T2parret, gT1C, gT2C, gvenn , ncol = 4, nrow = 1)
+# dev.off()
+```
+
+
+
+
+## severe time 1 and moderate time 1 
+
+```{r, echo=FALSE, warning= FALSE}
+fellesGener <- colnames(dat1.gener)
+table(dat1$Status)
+
+v <- vulcanoPlot(dat1.gener[dat1$Status == "Severe", fellesGener], dat1.gener[dat1$Status == "Moderate", fellesGener], main = "Severe T1 vs moderate T1")
+v$gg
+OppNedT1 <- v$aktuelleGener
+knitr::kable(OppNedT1)
+
+library(vegan)
+linestack(log2(v$x[!is.na(v$label)]), v$label[!is.na(v$label)], axis = T)
+
+tiff(fs::path(utSti, "vulcanoplot ST1vsMT1.tiff"), width = 500, height = 700)
+ v$gg + theme(legend.position = "none")
+dev.off()
+
+gST1vsMT1 <-  v$gg + theme(legend.position = "none")
+```
+
+
+
+
+
+
+## severe time 1 and control
+
+```{r, echo=FALSE, warning= FALSE}
+fellesGener <- colnames(dat1.gener)[colnames(dat1.gener) %in% colnames(dKont.gener)]
+
+v <- vulcanoPlot(dat1.gener[dat1$Status == "Severe",fellesGener], dKont.gener[,fellesGener], main = "Severe T1 vs controls")
+v$gg
+OppNedST1Kont <- v$aktuelleGener
+knitr::kable(OppNedST1Kont)
+
+d <- v$d
+d <- d[!d$diffexpressed == "NO",]
+d$col <- "red"
+d$col[d$diffexpressed == "DOWN"] <- "blue"
+d <- d[order(d$FoldChange),]
+d$stjerner <- lapply(d$adj.p.value, pVerdiStjerne)
+
+tiff(fs::path(utSti, "log2foldchange ST1_control.tiff"), width = 200, height = 700)
+par(mar = c(5, 4, 4, 2) + 0.1)
+linestack(log2(d$FoldChange), d$delabel, axis = T, air = 1.1, col = d$col, main = "Severe T1 vs controls", ylim = c(-4,4))
+dev.off()
+
+d$lab2 <- paste0(d$delabel, " (", d$stjerner, ")")
+
+tiff(fs::path(utSti, "log2foldchange ST1_control_med stjerne.tiff"), width = 240, height = 700)
+par(mar = c(5, 4, 4, 2) + 0.1)
+linestack(log2(d$FoldChange), d$lab2, axis = T, air = 1.1, col = d$col, main = "Severe T1 vs controls", ylim = c(-4,4))
+dev.off()
+
+
+tiff(fs::path(utSti, "foldchange ST1_control.tiff"), width = 200, height = 700)
+linestack(log2(d$FoldChange), d$delabel, axis = F, air = 1.1, col = d$col, main = "Severe T1 vs controls", ylim = c(-4,4)) 
+axis(side = 2, at = (-4):4, label = 2^((-4):4))
+dev.off()
+
+
+tiff(fs::path(utSti, "foldchange ST1_control_med stjerne.tiff"), width = 240, height = 700)
+linestack(log2(d$FoldChange), d$lab2, axis = F, air = 1.1, col = d$col, main = "Severe T1 vs controls", ylim = c(-4,4)) 
+axis(side = 2, at = (-4):4, label = 2^((-4):4))
+dev.off()
+
+
+
+
+tiff(fs::path(utSti, "vulcanoplot ST1_control.tiff"), width = 500, height = 700)
+ v$gg + theme(legend.position = "none")
+dev.off()
+
+gST1C <-  v$gg + theme(legend.position = "none")
+```
+
+
+
+## moderate time 1 and constrols 
+
+```{r, echo=FALSE, warning= FALSE}
+fellesGener <- colnames(dat1.gener)[colnames(dat1.gener) %in% colnames(dKont.gener)]
+
+v <- vulcanoPlot(dat1.gener[dat1$Status == "Moderate", fellesGener], dKont.gener[,fellesGener], main = "Moderate T1 vs controls")
+v$gg
+OppNedMT1Kont <- v$aktuelleGener
+knitr::kable(OppNedMT1Kont)
+
+tiff(fs::path(utSti, "vulcanoplot MT1_control.tiff"), width = 500, height = 700)
+ v$gg + theme(legend.position = "none")
+dev.off()
+
+
+
+d <- v$d
+d <- d[!d$diffexpressed == "NO",]
+d$col <- "red"
+d$col[d$diffexpressed == "DOWN"] <- "blue"
+d <- d[order(d$FoldChange),]
+d$stjerner <- lapply(d$adj.p.value, pVerdiStjerne)
+
+tiff(fs::path(utSti, "log2foldchange MT1_control.tiff"), width = 200, height = 700)
+par(mar = c(5, 4, 4, 2) + 0.1)
+linestack(log2(d$FoldChange), d$delabel, axis = T, air = 1.1, col = d$col, main = "Moderate T1 vs controls", ylim = c(-4,4))
+dev.off()
+
+d$lab2 <- paste0(d$delabel, " (", d$stjerner, ")")
+
+tiff(fs::path(utSti, "log2foldchange MT1_control_med stjerne.tiff"), width = 240, height = 700)
+par(mar = c(5, 4, 4, 2) + 0.1)
+linestack(log2(d$FoldChange), d$lab2, axis = T, air = 1.1, col = d$col, main = "Moderate T1 vs controls", ylim = c(-4,4))
+dev.off()
+
+
+tiff(fs::path(utSti, "foldchange MT1_control.tiff"), width = 200, height = 700)
+linestack(log2(d$FoldChange), d$delabel, axis = F, air = 1.1, col = d$col, main = "Moderate T1 vs controls", ylim = c(-4,4)) 
+axis(side = 2, at = (-4):4, label = 2^((-4):4))
+dev.off()
+
+
+tiff(fs::path(utSti, "foldchange MT1_control_med stjerne.tiff"), width = 240, height = 700)
+linestack(log2(d$FoldChange), d$lab2, axis = F, air = 1.1, col = d$col, main = "Moderate T1 vs controls", ylim = c(-4,4)) 
+axis(side = 2, at = (-4):4, label = 2^((-4):4))
+dev.off()
+
+
+
+
+
+
+gMT1C <-  v$gg + theme(legend.position = "none")
+```
+
+
+
+
+
+```{r, echo=FALSE, warning= FALSE}
+#install.packages("ggVennDiagram")
+library(ggVennDiagram)
+x <- list("ST1vsC" = OppNedST1Kont$delabel,
+          "ST1vsMT1" = OppNedT1$delabel,
+          "MT1vsC" = OppNedMT1Kont$delabel)
+
+gvenn <- ggVennDiagram(x) + scale_color_brewer(palette = "Paired") + scale_x_continuous(expand = expansion(mult = .2))
+gvenn
+tiff(fs::path(utSti, "venn_ST1_MT1_C.tiff"))
+gvenn
+dev.off()
+```
+
+
+
+
+```{r, echo=FALSE, warning= FALSE}
+library(ggpubr)
+
+tiff(fs::path(utSti, "Alle_venn_ST1_MT1_C.tiff"), width = 1500, height = 700)
+ggarrange(gST1vsMT1, gST1C, gMT1C, gvenn , ncol = 4, nrow = 1)
+dev.off()
+
+
+
+```
+
+## severe time 2 and moderate time 2 
+
+```{r, echo=FALSE, warning= FALSE}
+fellesGener <- colnames(dat2.gener)
+table(dat2$Status)
+
+v <- vulcanoPlot(dat2.gener[dat2$Status == "Severe", fellesGener], dat2.gener[dat2$Status == "Moderate", fellesGener], main = "Severe T2 vs moderate T2")
+v$gg
+OppNedT2 <- v$aktuelleGener
+knitr::kable(OppNedT2)
+
+fellesGener <- colnames(dat2.gener)[colnames(dat2.gener) %in% colnames(dKont.gener)]
+
+
+tiff(fs::path(utSti, "vulcanoplot ST2_MT2.tiff"), width = 500, height = 700)
+ v$gg + theme(legend.position = "none")
+dev.off()
+
+gST2vsMT2 <-  v$gg + theme(legend.position = "none")
+
+
+
+
+
+d <- v$d
+d <- d[!d$diffexpressed == "NO",]
+d$col <- "red"
+d$col[d$diffexpressed == "DOWN"] <- "blue"
+d <- d[order(d$FoldChange),]
+d$stjerner <- lapply(d$adj.p.value, pVerdiStjerne)
+
+tiff(fs::path(utSti, "log2foldchange ST2_MT2.tiff"), width = 200, height = 700)
+par(mar = c(5, 4, 4, 2) + 0.1)
+linestack(log2(d$FoldChange), d$delabel, axis = T, air = 1.1, col = d$col, main = "Severe T2 vs Moderate T2", ylim = c(-4,4))
+dev.off()
+
+d$lab2 <- paste0(d$delabel, " (", d$stjerner, ")")
+
+tiff(fs::path(utSti, "log2foldchange ST2_MT2_med stjerne.tiff"), width = 240, height = 700)
+par(mar = c(5, 4, 4, 2) + 0.1)
+linestack(log2(d$FoldChange), d$lab2, axis = T, air = 1.1, col = d$col, main = "Severe T2 vs Moderate T2", ylim = c(-4,4))
+dev.off()
+
+
+tiff(fs::path(utSti, "foldchange ST2_MT2.tiff"), width = 200, height = 700)
+linestack(log2(d$FoldChange), d$delabel, axis = F, air = 1.1, col = d$col, main = "Severe T2 vs Moderate T2", ylim = c(-4,4)) 
+axis(side = 2, at = (-4):4, label = 2^((-4):4))
+dev.off()
+
+
+tiff(fs::path(utSti, "foldchange ST2_MT2_med stjerne.tiff"), width = 240, height = 700)
+linestack(log2(d$FoldChange), d$lab2, axis = F, air = 1.1, col = d$col, main = "Severe T2 vs Moderate T2", ylim = c(-4,4)) 
+axis(side = 2, at = (-4):4, label = 2^((-4):4))
+dev.off()
+
+
+
+
+
+```
+
+
+## severe time 2 and control
+
+```{r, echo=FALSE, warning= FALSE}
+fellesGener <- colnames(dat2.gener)[colnames(dat2.gener) %in% colnames(dKont.gener)]
+
+v <- vulcanoPlot(dat2.gener[dat2$Status == "Severe",fellesGener], dKont.gener[,fellesGener], main = "Severe T2 vs controls")
+v$gg + theme(legend.position = "none")
+OppNedST2Kont <- v$aktuelleGener
+knitr::kable(OppNedST2Kont)
+
+tiff(fs::path(utSti, "vulcanoplot ST2_control.tiff"), width = 500, height = 700)
+ v$gg + theme(legend.position = "none")
+dev.off()
+
+gST2C <-  v$gg + theme(legend.position = "none")
+
+
+
+
+
+d <- v$d
+d <- d[!d$diffexpressed == "NO",]
+d$col <- "red"
+d$col[d$diffexpressed == "DOWN"] <- "blue"
+d <- d[order(d$FoldChange),]
+d$stjerner <- lapply(d$adj.p.value, pVerdiStjerne)
+
+tiff(fs::path(utSti, "log2foldchange ST2_Controls.tiff"), width = 200, height = 700)
+par(mar = c(5, 4, 4, 2) + 0.1)
+linestack(log2(d$FoldChange), d$delabel, axis = T, air = 1.1, col = d$col, main = "Severe T2 vs Controls", ylim = c(-4,4))
+dev.off()
+
+d$lab2 <- paste0(d$delabel, " (", d$stjerner, ")")
+
+tiff(fs::path(utSti, "log2foldchange ST2_Controls_med stjerne.tiff"), width = 240, height = 700)
+par(mar = c(5, 4, 4, 2) + 0.1)
+linestack(log2(d$FoldChange), d$lab2, axis = T, air = 1.1, col = d$col, main = "Severe T2 vs Controls", ylim = c(-4,4))
+dev.off()
+
+
+tiff(fs::path(utSti, "foldchange ST2_Controls.tiff"), width = 200, height = 700)
+linestack(log2(d$FoldChange), d$delabel, axis = F, air = 1.1, col = d$col, main = "Severe T2 vs Controls", ylim = c(-4,4)) 
+axis(side = 2, at = (-4):4, label = 2^((-4):4))
+dev.off()
+
+
+tiff(fs::path(utSti, "foldchange ST2_Controls_med stjerne.tiff"), width = 240, height = 700)
+linestack(log2(d$FoldChange), d$lab2, axis = F, air = 1.1, col = d$col, main = "Severe T2 vs Controls", ylim = c(-4,4)) 
+axis(side = 2, at = (-4):4, label = 2^((-4):4))
+dev.off()
+
+
+```
+
+
+
+## moderate time 2 and constrols 
+
+```{r, echo=FALSE, warning= FALSE}
+fellesGener <- colnames(dat2.gener)[colnames(dat2.gener) %in% colnames(dKont.gener)]
+
+v <- vulcanoPlot(dat2.gener[dat2$Status == "Moderate", fellesGener], dKont.gener[,fellesGener], main = "Moderate T2 vs controls")
+v$gg
+OppNedMT2Kont <- v$aktuelleGener
+knitr::kable(OppNedMT2Kont)
+
+tiff(fs::path(utSti, "vulcanoplot MT2_control.tiff"), width = 500, height = 700)
+ v$gg + theme(legend.position = "none")
+dev.off()
+
+gMT2C <-  v$gg + theme(legend.position = "none")
+
+
+
+d <- v$d
+d <- d[!d$diffexpressed == "NO",]
+d$col <- "red"
+d$col[d$diffexpressed == "DOWN"] <- "blue"
+d <- d[order(d$FoldChange),]
+d$stjerner <- lapply(d$adj.p.value, pVerdiStjerne)
+
+tiff(fs::path(utSti, "log2foldchange MT2_Controls.tiff"), width = 200, height = 700)
+par(mar = c(5, 4, 4, 2) + 0.1)
+linestack(log2(d$FoldChange), d$delabel, axis = T, air = 1.1, col = d$col, main = "Moderate T2 vs Controls", ylim = c(-4,4))
+dev.off()
+
+d$lab2 <- paste0(d$delabel, " (", d$stjerner, ")")
+
+tiff(fs::path(utSti, "log2foldchange MT2_Controls_med stjerne.tiff"), width = 240, height = 700)
+par(mar = c(5, 4, 4, 2) + 0.1)
+linestack(log2(d$FoldChange), d$lab2, axis = T, air = 1.1, col = d$col, main = "Moderate T2 vs Controls", ylim = c(-4,4))
+dev.off()
+
+
+tiff(fs::path(utSti, "foldchange MT2_Controls.tiff"), width = 200, height = 700)
+linestack(log2(d$FoldChange), d$delabel, axis = F, air = 1.1, col = d$col, main = "Moderate T2 vs Controls", ylim = c(-4,4)) 
+axis(side = 2, at = (-4):4, label = 2^((-4):4))
+dev.off()
+
+
+tiff(fs::path(utSti, "foldchange MT2_Controls_med stjerne.tiff"), width = 240, height = 700)
+linestack(log2(d$FoldChange), d$lab2, axis = F, air = 1.1, col = d$col, main = "Moderate T2 vs Controls", ylim = c(-4,4)) 
+axis(side = 2, at = (-4):4, label = 2^((-4):4))
+dev.off()
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+```{r, echo=FALSE, warning= FALSE}
+#install.packages("ggVennDiagram")
+library(ggVennDiagram)
+x <- list("ST2vsC" = OppNedST2Kont$delabel,
+          "ST2vsMT2" = OppNedT2$delabel,
+          "MT2vsC" = OppNedMT2Kont$delabel)
+
+gvenn <- ggVennDiagram(x) + scale_color_brewer(palette = "Paired") + scale_x_continuous(expand = expansion(mult = .2))
+gvenn
+tiff(fs::path(utSti, "venn_ST2_MT2_C.tiff"))
+gvenn
+dev.off()
+```
+
+
+
+
+```{r, echo=FALSE, warning= FALSE}
+
+tiff(fs::path(utSti, "Alle_venn_ST2_MT2_C.tiff"), width = 1500, height = 700)
+ggarrange(gST2vsMT2, gST2C, gMT2C, gvenn , ncol = 4, nrow = 1)
+dev.off()
+```
+
+
+
+```{r, echo=FALSE, warning= FALSE}
+# # KUN H3N2
+# 
+# dat1alle <- dat1
+# dat2alle <- dat2
+# dKontalle <- dKont
+# dat1.gener.alle <- dat1.gener
+# dat2.gener.alle <- dat2.gener
+# 
+# dat1.gener <- dat1.gener[dat1$Subgroup == "H3N2", ]
+# dat2.gener <- dat2.gener[dat2$Subgroup == "H3N2", ]
+# 
+# dat1 <- dat1[dat1$Subgroup == "H3N2", ]
+# dat2 <- dat2[dat2$Subgroup == "H3N2", ]
+# 
+# ```
+# 
+# 
+# ## paired time 1 and time 2
+# 
+# ```{r, echo=FALSE, warning= FALSE}
+# fellesGener <- colnames(dat1.gener)[colnames(dat1.gener) %in% colnames(dat2.gener)]
+# fellesID <- dat1$Pasientnr[dat1$Pasientnr %in% dat2$Pasientnr]
+# d1 <- dat1[dat1$Pasientnr %in% fellesID,]
+# d2 <- dat2[dat2$Pasientnr %in% fellesID,]
+# 
+# d1 <- d1[order(d1$Pasientnr), fellesGener]
+# d2 <- d2[order(d2$Pasientnr), fellesGener]
+# 
+# v <- vulcanoPlot(d1, d2[,fellesGener], main = "T1 vs T2, paired, H3N2", pairwise = TRUE)
+# v$gg
+# OppNedT1T2_parret <- v$aktuelleGener
+# knitr::kable(OppNedT1T2_parret)
+# ```
+# 
+# 
+# ## time 1 and controls 
+# 
+# ```{r, echo=FALSE, warning= FALSE}
+# fellesGener <- colnames(dat1.gener)[colnames(dat1.gener) %in% colnames(dKont.gener)]
+# 
+# v <- vulcanoPlot(dat1.gener[,fellesGener], dKont.gener[,fellesGener], main = "T1 vs controls, H3N2")
+# v$gg
+# OppNedT1Kont <- v$aktuelleGener
+# knitr::kable(OppNedT1Kont)
+# ```
+# 
+# ## time 2 and controls
+# 
+# ```{r, echo=FALSE, warning= FALSE}
+# fellesGener <- colnames(dat2.gener)[colnames(dat2.gener) %in% colnames(dKont.gener)]
+# 
+# v <- vulcanoPlot(dat2.gener[,fellesGener], dKont.gener[,fellesGener], main = "T2 vs controls, H3N2")
+# v$gg
+# OppNedT2Kont <- v$aktuelleGener
+# knitr::kable(OppNedT2Kont)
+# ```
+# 
+# 
+# ## severe time 1 and moderate time 1 
+# 
+# ```{r, echo=FALSE, warning= FALSE}
+# fellesGener <- colnames(dat1.gener)
+# table(dat1$Status)
+# 
+# v <- vulcanoPlot(dat1.gener[dat1$Status == "Severe", fellesGener], dat1.gener[dat1$Status == "Moderate", fellesGener], main = "Severe T1 vs moderate T1, H3N2")
+# v$gg
+# OppNed <- v$aktuelleGener
+# knitr::kable(OppNed)
+# ```
+# 
+# 
+# 
+# ## severe time 2 and moderate time 2 
+# 
+# ```{r, echo=FALSE, warning= FALSE}
+# fellesGener <- colnames(dat2.gener)
+# table(dat2$Status)
+# 
+# v <- vulcanoPlot(dat2.gener[dat2$Status == "Severe", fellesGener], dat2.gener[dat2$Status == "Moderate", fellesGener], main = "Severe T2 vs moderate T2, H3N2")
+# v$gg
+# OppNed <- v$aktuelleGener
+# knitr::kable(OppNed)
+# 
+# ```
+# 
+# 
+# 
+# 
+# ## severe time 1 and control
+# 
+# ```{r, echo=FALSE, warning= FALSE}
+# fellesGener <- colnames(dat1.gener)[colnames(dat1.gener) %in% colnames(dKont.gener)]
+# 
+# v <- vulcanoPlot(dat1.gener[dat1$Status == "Severe",fellesGener], dKont.gener[,fellesGener], main = "Severe T1 vs controls")
+# v$gg
+# OppNed <- v$aktuelleGener
+# knitr::kable(OppNed)
+# ```
+# 
+# 
+# 
+# ## moderate time 1 and constrols 
+# 
+# ```{r, echo=FALSE, warning= FALSE}
+# fellesGener <- colnames(dat1.gener)[colnames(dat1.gener) %in% colnames(dKont.gener)]
+# 
+# v <- vulcanoPlot(dat1.gener[dat1$Status == "Moderate", fellesGener], dKont.gener[,fellesGener], main = "Moderate T1 vs controls, H3N2")
+# v$gg
+# OppNed <- v$aktuelleGener
+# knitr::kable(OppNed)
+# ```
+# 
+# 
+# 
+# ## severe time 2 and control
+# 
+# ```{r, echo=FALSE, warning= FALSE}
+# fellesGener <- colnames(dat2.gener)[colnames(dat2.gener) %in% colnames(dKont.gener)]
+# 
+# v <- vulcanoPlot(dat2.gener[dat2$Status == "Severe",fellesGener], dKont.gener[,fellesGener], main = "Severe T2 vs controls, H3N2")
+# v$gg
+# OppNed <- v$aktuelleGener
+# knitr::kable(OppNed)
+# ```
+# 
+# 
+# 
+# ## moderate time 2 and constrols 
+# 
+# ```{r, echo=FALSE, warning= FALSE}
+# fellesGener <- colnames(dat2.gener)[colnames(dat2.gener) %in% colnames(dKont.gener)]
+# 
+# v <- vulcanoPlot(dat2.gener[dat2$Status == "Moderate", fellesGener], dKont.gener[,fellesGener], main = "Moderate T2 vs controls, H3N2")
+# v$gg
+# OppNed <- v$aktuelleGener
+# knitr::kable(OppNed)
+```

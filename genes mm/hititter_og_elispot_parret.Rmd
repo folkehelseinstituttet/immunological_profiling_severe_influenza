@@ -1,0 +1,368 @@
+---
+title: "T1 vs T2"
+author: "Anja Bråthen Kristoffersen"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, echo = F}
+print(paste0("Run date: ", Sys.Date()))
+
+library(ggplot2)
+
+analyseSti <- fs::path("F:", "Forskningsprosjekter", "PDB 2794 - Immune responses aga_", "Forskningsfiler", "JOBO", "CyTOF", "Analyse i R OUS", "CleanUpGatingMarch2022", "Analyse", "Endelig")
+gendataSti <- fs::path("F:", "Forskningsprosjekter", "PDB 2794 - Immune responses aga_", "Forskningsfiler", "JOBO", "CyTOF", "Analyse i R OUS", "CleanUpGatingMarch2022", "Analyse", "gen")
+dGener <- read.csv2(fs::path(gendataSti,  "dGener.csv"))
+d <- read.csv2(fs::path(analyseSti, "elisa_mm_status.csv"))
+d$StatusTid <- NULL
+dG2 <- dGener[, c("ID_tid",  "Status_tid")]
+d <- merge(d, dG2, by.x= "Pasientnr", by.y = "ID_tid")
+# d <- d[d$Pasientnr %in% dGener$ID_tid,]
+d$StatusTid <- d$Status_tid
+d$StatusTid <- factor(d$StatusTid, levels = c("Severe T1", "Moderate T1", "Severe T2", "Moderate T2", "Control"))
+table(d$StatusTid)
+
+dParred <- d[!d$Status == "Control",]
+dParred$ID <- substr(dParred$Pasientnr, 1, 7)
+antG <- table(dParred$ID)
+med <- names(antG)[antG == 2]
+
+dParred <- dParred[dParred$ID %in% med,]
+dParred <- dParred[order(dParred$Tid),]
+dParred <- dParred[order(dParred$ID),]
+
+dParredSevere <- dParred[dParred$Status == "Severe",]
+dParredModerate <- dParred[dParred$Status == "Moderate",]
+
+
+
+```
+
+
+#  Alle Parret
+
+```{r, echo = F, warning=FALSE}
+table(dParred$StatusTid)
+
+
+
+
+vari <- c("HI.homolog", "IFNg.virusstamme", 
+          "IFNg.CD4int", "IFNg.CD4ext", "IFNg.CD8int", "IFNg.CD8ext",
+          "IL2.CD4int", "IL2.CD4ext", "IL2.CD8int", "IL2.CD8ext", 
+          "IFNg.IL2.homol", "IFNgIL2.CD4int", "IFNgIL2.CD4ext", "IFNgIL2.CD8int", "IFNgIL2.CD8ext", "IL2.virusstamme")
+
+pT1_T2 <- rep(NA, length(vari))
+names(pT1_T2) <- vari
+ 
+
+for(i in 1:length(vari)){
+  kol <- which(colnames(dParred) == vari[i])
+  pT1_T2[i] <- wilcox.test(dParred[dParred$Tid == "T1", kol], dParred[dParred$Tid == "T2", kol], paired = T)$p.value
+}
+print("p-verdier")
+round(pT1_T2, 5)
+
+print("adjp-verdier")
+adjpT1_T2 <- p.adjust(pT1_T2[2:length(pT1_T2)])
+
+round(adjpT1_T2, 5)
+
+print("only severe")
+
+pT1_T2 <- rep(NA, length(vari))
+names(pT1_T2) <- vari
+ 
+
+for(i in 1:length(vari)){
+  kol <- which(colnames(dParredSevere) == vari[i])
+  pT1_T2[i] <- wilcox.test(dParredSevere[dParredSevere$Tid == "T1", kol], dParredSevere[dParredSevere$Tid == "T2", kol], paired = T)$p.value
+}
+
+adjpT1_T2 <- p.adjust(pT1_T2[2:length(pT1_T2)])
+
+round(adjpT1_T2, 5)
+
+
+print("only Moderate")
+
+pT1_T2 <- rep(NA, length(vari))
+names(pT1_T2) <- vari
+ 
+
+for(i in 1:length(vari)){
+  kol <- which(colnames(dParredModerate) == vari[i])
+  pT1_T2[i] <- wilcox.test(dParredModerate[dParredModerate$Tid == "T1", kol], dParredModerate[dParredModerate$Tid == "T2", kol], paired = T)$p.value
+}
+print("p-verdier")
+round(pT1_T2, 5)
+
+print("adjp-verdier")
+adjpT1_T2 <- p.adjust(pT1_T2[2:length(pT1_T2)])
+
+round(adjpT1_T2, 5)
+
+
+
+```
+
+# H3
+```{r, echo = F, warning=FALSE}
+
+dParredH3 <- dParred[dParred$Subgr == "H3",]
+table(dParredH3$StatusTid)
+
+
+
+pT1_T2 <- rep(NA, length(vari))
+names(pT1_T2) <- vari
+ 
+
+for(i in 1:length(vari)){
+  kol <- which(colnames(dParredH3) == vari[i])
+  pT1_T2[i] <- wilcox.test(dParredH3[dParredH3$Tid == "T1", kol], dParredH3[dParredH3$Tid == "T2", kol], paired = T)$p.value
+}
+print("p-verdier")
+round(pT1_T2, 5)
+
+print("adjp-verdier")
+
+adjpT1_T2 <- p.adjust(pT1_T2[2:length(pT1_T2)])
+
+round(adjpT1_T2, 5)
+
+print("Severe")
+dParredH3Severe <- dParredH3[dParredH3$Status == "Severe",]
+
+
+pT1_T2 <- rep(NA, length(vari))
+names(pT1_T2) <- vari
+ 
+
+for(i in 1:length(vari)){
+  kol <- which(colnames(dParredH3Severe) == vari[i])
+  pT1_T2[i] <- wilcox.test(dParredH3Severe[dParredH3Severe$Tid == "T1", kol], dParredH3Severe[dParredH3Severe$Tid == "T2", kol], paired = T)$p.value
+}
+print("p-verdier")
+round(pT1_T2, 5)
+
+print("adjp-verdier")
+
+adjpT1_T2 <- p.adjust(pT1_T2[2:length(pT1_T2)])
+
+round(adjpT1_T2, 5)
+
+
+
+
+print("Moderate")
+dParredH3Moderate <- dParredH3[dParredH3$Status == "Moderate",]
+
+
+pT1_T2 <- rep(NA, length(vari))
+names(pT1_T2) <- vari
+ 
+
+for(i in 1:length(vari)){
+  kol <- which(colnames(dParredH3Moderate) == vari[i])
+  pT1_T2[i] <- wilcox.test(dParredH3Moderate[dParredH3Moderate$Tid == "T1", kol], dParredH3Moderate[dParredH3Moderate$Tid == "T2", kol], paired = T)$p.value
+}
+print("p-verdier")
+round(pT1_T2, 5)
+
+print("adjp-verdier")
+
+adjpT1_T2 <- p.adjust(pT1_T2[2:length(pT1_T2)])
+
+round(adjpT1_T2, 5)
+
+```
+
+
+
+
+# H1N1
+```{r, echo = F, warning=FALSE}
+
+dParredH1N1 <- dParred[dParred$Subgr == "H1N1",]
+table(dParredH1N1$StatusTid)
+
+pT1_T2 <- rep(NA, length(vari))
+names(pT1_T2) <- vari
+ 
+
+for(i in 1:length(vari)){
+  kol <- which(colnames(dParredH1N1) == vari[i])
+  if(!all(is.na(dParredH1N1[dParredH1N1$Tid == "T1", kol]))){
+    pT1_T2[i] <- wilcox.test(dParredH1N1[dParredH1N1$Tid == "T1", kol], dParredH1N1[dParredH1N1$Tid == "T2", kol], paired = T)$p.value
+  }
+  
+
+}
+print("p-verdier")
+round(pT1_T2, 5)
+
+print("adjp-verdier")
+adjpT1_T2 <- p.adjust(pT1_T2[2:length(pT1_T2)])
+
+round(adjpT1_T2, 5)
+```
+
+
+# B
+```{r, echo = F, warning=FALSE}
+
+dParredB <- dParred[dParred$Subgr == "B",]
+table(dParredB$StatusTid)
+
+
+
+pT1_T2 <- rep(NA, length(vari))
+names(pT1_T2) <- vari
+ 
+
+for(i in 1:length(vari)){
+  kol <- which(colnames(dParredB) == vari[i])
+  pT1_T2[i] <- wilcox.test(dParredB[dParredB$Tid == "T1", kol], dParredB[dParredB$Tid == "T2", kol], paired = T)$p.value
+}
+print("p-verdier")
+round(pT1_T2, 5)
+
+print("adjp-verdier")
+
+adjpT1_T2 <- p.adjust(pT1_T2[2:length(pT1_T2)])
+
+round(adjpT1_T2, 5)
+
+
+print("Severe")
+dParredBSevere <- dParredB[dParredB$Status == "Severe",]
+
+
+pT1_T2 <- rep(NA, length(vari))
+names(pT1_T2) <- vari
+ 
+
+for(i in 1:length(vari)){
+  kol <- which(colnames(dParredBSevere) == vari[i])
+  if(!all(is.na(dParredBSevere[dParredBSevere$Tid == "T1", kol]))){
+    pT1_T2[i] <- wilcox.test(dParredBSevere[dParredBSevere$Tid == "T1", kol], dParredBSevere[dParredBSevere$Tid == "T2", kol], paired = T)$p.value
+  }
+}
+print("p-verdier")
+round(pT1_T2, 5)
+
+print("adjp-verdier")
+adjpT1_T2 <- p.adjust(pT1_T2[2:length(pT1_T2)])
+
+round(adjpT1_T2, 5)
+
+
+
+
+print("Moderate")
+dParredBModerate <- dParredB[dParredB$Status == "Moderate",]
+
+
+pT1_T2 <- rep(NA, length(vari))
+names(pT1_T2) <- vari
+ 
+
+for(i in 1:length(vari)){
+  kol <- which(colnames(dParredBModerate) == vari[i])
+  pT1_T2[i] <- wilcox.test(dParredBModerate[dParredBModerate$Tid == "T1", kol], dParredBModerate[dParredBModerate$Tid == "T2", kol], paired = T)$p.value
+}
+print("p-verdier")
+round(pT1_T2, 5)
+
+print("adjp-verdier")
+adjpT1_T2 <- p.adjust(pT1_T2[2:length(pT1_T2)])
+
+round(adjpT1_T2, 5)
+```
+
+
+#  IFNg.IL2.homol
+
+```{r, echo = F}
+ggplot(data = dParred, aes(x = Tid, y = IFNg.IL2.homol, group = ID, colour = Subgr)) +
+  geom_line() + ggtitle("all")
+  
+ggplot(data = dParred, aes(x = Tid, y = IFNg.IL2.homol, group = ID, colour = Status)) +
+  geom_line() + ggtitle("all")
+
+
+
+
+ggplot(data = dParred[dParred$Subgr == "H3",], aes(x = Tid, y = IFNg.IL2.homol, group = ID, colour = Status)) +
+  geom_line() + ggtitle("H3")
+
+
+ggplot(data = dParred[dParred$Subgr == "H1N1",], aes(x = Tid, y = IFNg.IL2.homol, group = ID, colour = Status)) +
+  geom_line() + ggtitle("H1N1")
+
+
+ggplot(data = dParred[dParred$Subgr == "B",], aes(x = Tid, y = IFNg.IL2.homol, group = ID, colour = Status)) +
+  geom_line() + ggtitle("B")
+
+
+```
+
+
+#   IL2.virusstamme
+
+```{r, echo = F}
+ggplot(data = dParred, aes(x = Tid, y =  IL2.virusstamme, group = ID, colour = Subgr)) +
+  geom_line() + ggtitle("all")
+  
+ggplot(data = dParred, aes(x = Tid, y =  IL2.virusstamme, group = ID, colour = Status)) +
+  geom_line() + ggtitle("all")
+
+
+
+
+ggplot(data = dParred[dParred$Subgr == "H3",], aes(x = Tid, y =  IL2.virusstamme, group = ID, colour = Status)) +
+  geom_line() + ggtitle("H3")
+
+
+ggplot(data = dParred[dParred$Subgr == "H1N1",], aes(x = Tid, y =  IL2.virusstamme, group = ID, colour = Status)) +
+  geom_line() + ggtitle("H1N1")
+
+
+ggplot(data = dParred[dParred$Subgr == "B",], aes(x = Tid, y =  IL2.virusstamme, group = ID, colour = Status)) +
+  geom_line() + ggtitle("B")
+
+
+```
+
+
+#  IL2.CD8int
+
+```{r, echo = F}
+ggplot(data = dParred, aes(x = Tid, y = IL2.CD8int, group = ID, colour = Subgr)) +
+  geom_line() + ggtitle("all")
+  
+ggplot(data = dParred, aes(x = Tid, y = IL2.CD8int, group = ID, colour = Status)) +
+  geom_line() + ggtitle("all")
+
+
+
+
+ggplot(data = dParred[dParred$Subgr == "H3",], aes(x = Tid, y = IL2.CD8int, group = ID, colour = Status)) +
+  geom_line() + ggtitle("H3")
+
+
+ggplot(data = dParred[dParred$Subgr == "H1N1",], aes(x = Tid, y = IL2.CD8int, group = ID, colour = Status)) +
+  geom_line() + ggtitle("H1N1")
+
+
+ggplot(data = dParred[dParred$Subgr == "B",], aes(x = Tid, y = IL2.CD8int, group = ID, colour = Status)) +
+  geom_line() + ggtitle("B")
+
+
+```
+

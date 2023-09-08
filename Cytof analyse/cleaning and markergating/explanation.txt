@@ -1,0 +1,16 @@
+For each setup:
+
+First run the "cleaning up gating..." file, but remember to inspect the signal/density plots and adjust gates if necessary. 
+This will give you a clean dataset to work further on. 
+The clean-up gating followed the same approach as described in Fluidigm Technical note PN 400248 B1.
+
+Then by running "marker_gating_...." all files will get a gate for each marker. The script must be adjusted to which markers used, 
+and also which type of gating wanted for that marker. This could be gating by the upper density bump, the lower density bump, in the middle between two bumps.
+It also have to be adjustet to how many gates wanted, just negative/positive or negative/low/high. 
+The script will generate density and signal-signal figures for all files and each marker. 
+It also generates 
+ * a csv file with the mean gate for each marker and
+ * a posNeg R object, which is a list with matrices for all files that is as big as the cleaned data file and for each marker have a value 
+   0/1 or 0/1/2 for each cell indicating if this cell is regarded as negative/positive or negative/low/high. 
+The posNeg file will later be used for automatical manuel gating
+

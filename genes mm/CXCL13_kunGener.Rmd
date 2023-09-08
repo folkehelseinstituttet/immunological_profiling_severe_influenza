@@ -1,0 +1,210 @@
+---
+title: "CXCL13.x kun gener"
+author: "Anja Bråthen Kristoffersen"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, echo = F}
+library(ggplot2)
+library(ggsignif)
+
+analyseSti <- fs::path("F:", "Forskningsprosjekter", "PDB 2794 - Immune responses aga_", "Forskningsfiler", "JOBO", "CyTOF", "Analyse i R OUS", "CleanUpGatingMarch2022", "Analyse", "gen")
+
+figSti <- fs::path("F:", "Forskningsprosjekter", "PDB 2794 - Immune responses aga_", "Forskningsfiler", "JOBO", "CyTOF", "Analyse i R OUS", "CleanUpGatingMarch2022", "Analyse", "Endelig", "Figurer")
+gendataSti <- fs::path("F:", "Forskningsprosjekter", "PDB 2794 - Immune responses aga_", "Forskningsfiler", "JOBO", "CyTOF", "Analyse i R OUS", "CleanUpGatingMarch2022", "Analyse", "gen")
+dGener <- read.csv2(fs::path(gendataSti,  "dGener.csv"))
+
+d <- read.csv2(fs::path(analyseSti, "elisa_mm_status"))
+
+d2 <- merge(d, dGener, by.x = "Pasientnr", by.y = "ID_tid")
+#NB CXCL13.y er et GEN ikke plasma...
+#d <- d[d$Pasientnr %in% dGener$ID_tid,]
+d <- d2
+
+#d$Status_tid <- paste(d$Status, d$Tid.y)
+#d$Status_tid[d$Status_tid == "Control Control"] <- "Control"
+d$Status_tid <- factor(d$Status_tid, 
+                       levels = c("Severe T1", "Moderate T1", "Severe T2", "Moderate T2", "Control"))
+d$Sex <- "Male"
+d$Sex[d$Female.x == 1] <- "Female"
+
+d$Age <- d$Alder
+d$CXCL13.xkorrigert <- d$CXCL13.x
+d$CXCL13.xkorrigert[d$Status == "Control"] <- 3.53 * d$CXCL13.x[d$Status == "Control"]
+d$CXCL13.xkorrigert[!d$Status == "Control"] <- 1.25 * d$CXCL13.x[!d$Status == "Control"]
+dalle <- d
+
+
+# colorlegend <- c("Severe T1" = "red", "Moderate T1" = "blue", "Severe T2" = "pink", "Moderate T2" = "light blue", "Control" = "light green")
+colorlegend <- c("Severe T1" = "#990000", "Moderate T1" = "#000099", "Severe T2" = "#FF6666", "Moderate T2" = "#6699FF", "Control" = "#00CC00")
+
+
+wilcox.test(d$CXCL13.x[d$Sex == "Female" & d$Tid.y == "T1"], d$CXCL13.x[d$Sex == "Male" & d$Tid.y == "T1"])
+
+
+wilcox.test(d$CXCL13.x[d$Alder > 64 & d$Tid.y == "T1"], d$CXCL13.x[d$Alder < 64 & d$Tid.y == "T1"])
+
+
+wilcox.test(d$CXCL13.x[d$Sex == "Female" & d$Tid.y == "T2"], d$CXCL13.x[d$Sex == "Male" & d$Tid.y == "T2"])
+
+
+wilcox.test(d$CXCL13.x[d$Alder > 64 & d$Tid.y == "T2"], d$CXCL13.x[d$Alder < 64 & d$Tid.y == "T2"])
+
+
+
+```
+
+
+
+```{r, echo = F, warning = FALSE, comment = FALSE}
+# all patients
+
+## wilcoxon, 
+
+# parvis alle kombinasjoner, ingen korreksjon da CXCL13.x anses som en separat test
+ pairwise.wilcox.test(d$CXCL13.x, d$Status_tid , p.adjust.method="none")
+
+
+wilcox.test(d$CXCL13.x[d$Status_tid == "Severe T1"], d$CXCL13.x[d$Status_tid == "Moderate T1"])
+```
+#linear reg ikke normalfordelig oppnådd så se bort fra!
+
+```{r, echo = F, fig.width= 15, fig.height=8, warning = FALSE, comment = FALSE}
+
+# * må bruke linear regresjon, som ikke er optimalt da vi da må anta normalfordeling
+# * men beste modell (lavest AIC verdi) inneholder ikke alder og kjønn, så tenker vi kan anta at alder og kjønn ikke er viktig. 
+# # hist(d$CXCL13.x)
+# # hist(log(d$CXCL13.x))
+# #head(d)
+print("number of samples:")
+table(is.na(d$CXCL13.x))
+print("distribution of samples")
+table(d$Status_tid[!is.na(d$CXCL13.x)])
+
+fit0 <- glm(log(CXCL13.x) ~ 1, data = d)
+fitAge <- glm(log(CXCL13.x) ~ Age , data = d)
+fitSex <- glm(log(CXCL13.x) ~ Sex , data = d)
+fitStatusTid <- glm(log(CXCL13.x) ~ Status_tid, data = d)
+fitAgeSex <- glm(log(CXCL13.x) ~ Age + Sex , data = d)
+fitAgeStatusTid <- glm(log(CXCL13.x) ~ Age + Status_tid, data = d)
+fitSexStatusTid <- glm(log(CXCL13.x) ~ Sex + Status_tid, data = d)
+fitAgeSexStatusTid <- glm(log(CXCL13.x) ~ Age + Sex + Status_tid, data = d)
+AIC(fit0, fitAge, fitSex, fitStatusTid, fitAgeSex, fitAgeStatusTid, fitSexStatusTid, fitAgeSexStatusTid)
+summary(fitStatusTid)
+
+# # predData <- expand.grid(Status_tid = levels(d$Status_tid))
+# # pred <- predict(fit, newdata = predData, type = "response", se.fit = TRUE)
+# # predData$CXCL13.x <- exp(pred$fit)
+# # predData$pred_lower <- exp(pred$fit - 1.96*pred$se.fit)
+# # predData$pred_upper <- exp(pred$fit + 1.96*pred$se.fit)
+# # 
+# # predData <- data.frame(predData)
+# # i_Status_tid <- which(colnames(d) == "Status_tid")
+# # i_Sex <- which(colnames(d) == "Sex")
+# # i_CXCL13.x  <- which(colnames(d) == "CXCL13.x")
+# # d2 <- d[,c(i_CXCL13.x, i_Status_tid, i_Sex)]
+# # colnames(d2) <- c("CXCL13.x", "Status_tid", "Sex")
+# # g <- ggplot(d2 , aes(x = Status_tid, y = CXCL13.x)) +
+# #   geom_boxplot(outlier.shape = NA) +
+# #   geom_jitter(size = 2, alpha=1, position=position_jitter(0.2), aes(col = Sex)) +
+# #   geom_errorbar(data = predData, aes(ymin = pred_lower, ymax = pred_upper, col = paste("predicted")), width = 0.2, position = position_dodge(0.9)) +
+# #   geom_point(data = predData, aes(x = Status_tid, y = CXCL13.x, col = paste("predicted")), size = 3)
+# # 
+# # 
+# # g
+# # 
+# # 
+# #  d_resid <- data.frame(fitted = fitted(fit), residuals = residuals(fit), Status_tid = d$Status_tid[!is.na(d$CXCL13.x)])
+# # 
+# #   g_resid <- ggplot(d_resid, aes(x = fitted, y = residuals, col = Status_tid)) +
+# #       geom_jitter(position=position_jitter(0.2)) + ggtitle("residual plot") + geom_abline(slope = 0, intercept = 0) + theme(axis.text = element_text(size = 14), axis.title = element_text(size = 20), title  = element_text(size = 20))
+# #     print(g_resid)
+
+```
+
+### CXCL13.x kontroll korrigert med faktor på 3.53
+
+```{r, echo = F, warning = FALSE, comment = FALSE}
+d$CXCL13.xraa <- d$CXCL13.x
+d$CXCL13.x <- d$CXCL13.xkorrigert
+pairwise.wilcox.test(d$CXCL13.x, d$Status_tid , p.adjust.method="none")
+
+
+ table(d$Status_tid[!is.na(d$CXCL13.x)])
+ table(is.na(d$CXCL13.x))
+ 
+ 
+ wilcox.test(d$CXCL13.x[d$Sex == "Female" & d$Tid.y == "T1"], d$CXCL13.x[d$Sex == "Male" & d$Tid.y == "T1"])
+   
+   
+   wilcox.test(d$CXCL13.x[d$Age > 64 & d$Tid.y == "T1"], d$CXCL13.x[d$Age < 65 &  d$Tid.y == "T1"])
+ quantile(d$CXCL13.x[d$Age > 64 & d$Tid.y == "T1"],  p =c(0.025,0.5,0.975), na.rm = T)
+   quantile(d$CXCL13.x[d$Age < 65 & d$Tid.y == "T1"],  p =c(0.025,0.5,0.975), na.rm = T)
+
+  
+   
+   wilcox.test(d$CXCL13.x[d$Sex == "Female" & d$Tid.y == "T2"], d$CXCL13.x[d$Sex == "Male" & d$Tid.y == "T2"])
+   
+   
+   wilcox.test(d$CXCL13.x[d$Age > 64 & d$Tid.y == "T2"], d$CXCL13.x[d$Age < 65 &  d$Tid.y == "T2"])
+ 
+```
+
+
+
+
+
+```{r, echo = F, warning = FALSE, comment = FALSE, fig.width= 15, fig.height=8}
+
+ pairwise.wilcox.test(d$CXCL13.x, d$Status_tid , p.adjust.method="none")
+
+d$Status_tid <- gsub("evere", "", d$Status_tid)
+d$Status_tid <- gsub("oderate", "", d$Status_tid)
+d$Status_tid <- gsub("ontrol", "", d$Status_tid)
+nivaa <- c("S T1", "M T1", "S T2", "M T2", "C" )
+
+d$Status_tid <- factor(d$Status_tid, levels = nivaa)
+colorlegend <- c("S T1" = "#990000", "M T1" = "#000099", "S T2" = "#FF6666", "M T2" = "#6699FF", "C" = "#00CC00")
+
+
+g <- ggplot(d , aes(x = Status_tid, y = CXCL13.x, fill = Status_tid)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(size = 2, alpha=1, position=position_jitter(0.2), pch = 1) + #, aes(col = Sex)) 
+   geom_signif(comparisons = list(c("S T1", "M T1")), map_signif_level=TRUE, annotations="*",
+               y_position = 720, textsize = 8, tip_length = 0) +
+   geom_signif(comparisons = list(c("S T1", "S T2")), map_signif_level=TRUE, annotations="***",
+              y_position = 660, textsize = 8, tip_length = 0) +
+  geom_signif(comparisons = list(c("M T1", "M T2")), map_signif_level=TRUE, annotations="***",
+              y_position = 600, textsize = 8, tip_length = 0) + xlab("") + 
+  # geom_signif(comparisons = list(c("S T2", "M T2")), map_signif_level=TRUE, annotations="*",
+  #             y_position = 640, textsize = 8, tip_length = 0) + xlab("") + 
+  geom_vline(xintercept = 4.5) + 
+  #theme(text = element_text(size = 20))  + 
+  labs(fill = "") +  ylab("pg/mL") + ggtitle("plasma CXCL13") +
+  theme_classic(base_size = 25) +
+  scale_fill_manual(values = colorlegend) + ylim(0,770) +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) 
+
+
+  
+
+g
+
+tiff(fs::path(figSti, "Boxplot", "CLCX13_kunGen.tiff"), width = 800, height = 500)
+g
+dev.off()
+
+tiff(fs::path(figSti, "Boxplot uten legend", "CLCX13_kunGen.tiff"), width = 500, height = 500)
+g + theme(legend.position = "none")
+dev.off()
+
+
+
+```
+```
+

@@ -1,0 +1,1012 @@
+---
+title: "Panel 2 unsuperviced"
+author: "Anja Bråthen Kristoffersen"
+
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+This script was run:
+
+```{r, echo = F}
+date()
+
+
+```
+
+
+```{r,echo = F, comment= FALSE, message= FALSE}
+library(ggplot2)
+library(MASS)
+library(ggsignif)
+library(ggpubr)
+library(ggbreak)
+
+scriptPath_UnsupAnalysis <- fs::path("F:", "Forskningsprosjekter", "PDB 2794 - Immune responses aga_", "Forskningsfiler", "JOBO", "CyTOF", "Analyse i R OUS", "CleanUpGatingMarch2022", "Analyse", "Endelig", "Cytof unsupperviced")
+utSti <- fs::path(scriptPath_UnsupAnalysis, "Endelig_des2022",  "Figurer",  "ResNegBinPlotP2")
+
+sexShape <- c("M" = 2, "F" = 1)
+
+colorlegend <-  c("Severe T1" = "#990000", "Moderate T1" = "#000099", "Severe T2" = "#FF6666", "Moderate T2" = "#6699FF", "Control" = "#00CC00")
+
+colorlegend <- c("S T1" = "#990000", "M T1" = "#000099", "S T2" = "#FF6666", "M T2" = "#6699FF", "C" = "#00CC00")
+colorlegendSex <- c("S T1 F" = "#990000", "S T1 M" = "#990000", "M T1 F" = "#000099", "M T1 M" = "#000099", "S T2 F" = "#FF6666", "S T2 M" = "#FF6666", 
+                    "M T2 F" = "#6699FF", "M T2 M" = "#6699FF", "C F" = "#00CC00", "C M" = "#00CC00") 
+
+
+convert <- function(adj){
+  res <- ""
+  if(adj < params$adj_p){
+    res <- "."
+  }
+  if(adj < 0.05){
+    res <- "*"
+  }
+  if(adj < 0.01){
+    res <- "**"
+  }
+  if(adj < 0.001){
+    res <- "***"
+  }
+  return(res)
+}
+
+params <- list()
+params$panel <- "Panel 2"
+params$seed <- 2234 
+params$ks <- c(10, 20, 30 ,40, 50, 60)
+params$n_per_file <- 25000
+params$ext_name <- "All"
+params$utSti <- fs::path(scriptPath_UnsupAnalysis, "Endelig_des2022", params$panel, params$ext_name, paste("seed", params$seed))
+params$adj_p <- 0.05
+params$adj_p_methods <- "fdr" #"bonferroni" # "fdr" # see help(p.adjust) for other methods
+params$tidspunkt <- TRUE
+params$posNeg_path <- fs::path("F:", "Forskningsprosjekter", "PDB 2794 - Immune responses aga_", "Forskningsfiler", "JOBO", "CyTOF", "Analyse i R OUS", "CleanUpGatingMarch2022", paste0("gating_results_Panel", gsub("Panel ", "", params$panel),"_mars2022"), "posNeg", "Data")
+params$nivaa <- c("Severe T1", "Moderate T1", "Severe T2", "Moderate T2", "Control" )
+params$nivaa <- c("S T1", "M T1", "S T2", "M T2", "C" )
+
+
+d <- read.csv2(fs::path(params$utSti, paste0("unike_klustre", params$seed, ".csv")))
+d$statusTid <- gsub("evere", "", d$statusTid)
+d$statusTid <- gsub("oderate", "", d$statusTid)
+d$statusTid <- gsub("ontrol", "", d$statusTid)
+
+d$statusTid <- factor(d$statusTid, levels = params$nivaa)
+
+d$StatusTid_MT1 <- factor(d$statusTid, levels = params$nivaa[c(2:5, 1)])
+d$StatusTid_ST2 <- factor(d$statusTid, levels = params$nivaa[c(3:5, 1:2)])
+d$StatusTid_MT2 <- factor(d$statusTid, levels = params$nivaa[c(4:5, 1:3)])
+
+clusters <- colnames(d)[grepl("kluster", colnames(d))]
+
+ p <- rep(NA, length(clusters))
+ names(p) <- clusters
+ pST1_ST2 <- p
+# pST1_C <- p
+ pMT1_MT2 <- p
+# pMT1_C <- p
+# pST2_MT2 <- p
+# pST2_C <- p
+# pMT2_C <- p
+
+
+
+for(ii in 1:length(clusters)){
+  i <- which(colnames(d) == clusters[ii])
+
+  fit1 <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt))  + statusTid + age + sex , data = d)
+  fit2 <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt))  + statusTid + age  , data = d)
+  fit3 <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt))  + statusTid  + sex , data = d)
+  fit4 <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt))  + statusTid   , data = d)
+
+#  p[clusters[ii]] <- min(summary(fit1)$coeff[2,4], summary(fit2)$coeff[2,4], summary(fit3)$coeff[2,4], summary(fit4)$coeff[2,4])
+  pST1_ST2[clusters[ii]] <- min(summary(fit1)$coeff[3,4], summary(fit2)$coeff[3,4], summary(fit3)$coeff[3,4], summary(fit4)$coeff[3,4])
+  # pST1_C[clusters[ii]] <- min(summary(fit1)$coeff[5,4], summary(fit2)$coeff[5,4], summary(fit3)$coeff[5,4], summary(fit4)$coeff[5,4])
+
+  fit1 <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt))  + StatusTid_MT1 + age + sex , data = d)
+  fit2 <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt))  + StatusTid_MT1 + age  , data = d)
+  fit3 <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt))  + StatusTid_MT1  + sex , data = d)
+  fit4 <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt))  + StatusTid_MT1   , data = d)
+  pMT1_MT2[clusters[ii]] <- min(summary(fit1)$coeff[3,4], summary(fit2)$coeff[3,4], summary(fit3)$coeff[3,4], summary(fit4)$coeff[3,4])
+  # pMT1_C[clusters[ii]] <- min(summary(fit1)$coeff[4,4], summary(fit2)$coeff[4,4], summary(fit3)$coeff[4,4], summary(fit4)$coeff[4,4])
+
+  # fit1 <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt))  + StatusTid_ST2 + age + sex , data = d)
+  # fit2 <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt))  + StatusTid_ST2 + age  , data = d)
+  # fit3 <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt))  + StatusTid_ST2  + sex , data = d)
+  # fit4 <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt))  + StatusTid_ST2   , data = d)
+  # pST2_MT2[clusters[ii]] <- min(summary(fit1)$coeff[2,4], summary(fit2)$coeff[2,4], summary(fit3)$coeff[2,4], summary(fit4)$coeff[2,4])
+  # pST2_C[clusters[ii]] <- min(summary(fit1)$coeff[3,4], summary(fit2)$coeff[3,4], summary(fit3)$coeff[3,4], summary(fit4)$coeff[3,4])
+
+
+  # fit1 <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt))  + StatusTid_MT2 + age + sex , data = d)
+  # fit2 <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt))  + StatusTid_MT2 + age  , data = d)
+  # fit3 <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt))  + StatusTid_MT2  + sex , data = d)
+  # fit4 <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt))  + StatusTid_MT2   , data = d)
+  # pMT2_C[clusters[ii]] <- min(summary(fit1)$coeff[2,4], summary(fit2)$coeff[2,4], summary(fit3)$coeff[2,4], summary(fit4)$coeff[2,4])
+
+}
+
+adj.pST1_ST2 <- p.adjust(pST1_ST2, params$adj_p_methods)
+adj.pMT1_MT2 <- p.adjust(pMT1_MT2, params$adj_p_methods)
+
+
+d_temp <- read.csv2("F:/Forskningsprosjekter/PDB 2794 - Immune responses aga_/Forskningsfiler/JOBO/CyTOF/Analyse i R OUS/CleanUpGatingMarch2022/Analyse/Endelig/Cytof unsupperviced/Endelig_des2022/Panel 2/All/seed 2234/IRRadjp_2234.csv")
+adj.p <- d_temp$adj_p
+names(adj.p) <- d_temp$cluster
+d_temp <- read.csv2("F:/Forskningsprosjekter/PDB 2794 - Immune responses aga_/Forskningsfiler/JOBO/CyTOF/Analyse i R OUS/CleanUpGatingMarch2022/Analyse/Endelig/Cytof unsupperviced/Endelig_des2022/Panel 2/All/seed 2234/ST1vsCont/IRRadjp_2234.csv")
+adj.pST1_C <- d_temp$adj_p
+names(adj.pST1_C) <- d_temp$cluster
+
+d_temp <- read.csv2("F:/Forskningsprosjekter/PDB 2794 - Immune responses aga_/Forskningsfiler/JOBO/CyTOF/Analyse i R OUS/CleanUpGatingMarch2022/Analyse/Endelig/Cytof unsupperviced/Endelig_des2022/Panel 2/All/seed 2234/MT1vsCont/IRRadjp_2234.csv")
+adj.pMT1_C <- d_temp$adj_p
+names(adj.pMT1_C) <- d_temp$cluster
+
+d_temp <- read.csv2("F:/Forskningsprosjekter/PDB 2794 - Immune responses aga_/Forskningsfiler/JOBO/CyTOF/Analyse i R OUS/CleanUpGatingMarch2022/Analyse/Endelig/Cytof unsupperviced/Endelig_des2022/Panel 2/All/seed 2234/ST2vsMT2/IRRadjp_2234.csv")
+
+adj.pST2_MT2 <- d_temp$adj_p
+names(adj.pST2_MT2) <- d_temp$cluster
+
+d_temp <- read.csv2("F:/Forskningsprosjekter/PDB 2794 - Immune responses aga_/Forskningsfiler/JOBO/CyTOF/Analyse i R OUS/CleanUpGatingMarch2022/Analyse/Endelig/Cytof unsupperviced/Endelig_des2022/Panel 2/All/seed 2234/ST2vsCont/IRRadjp_2234.csv")
+
+adj.pST2_C <- d_temp$adj_p
+names(adj.pST2_C) <- d_temp$cluster
+
+d_temp <- read.csv2("F:/Forskningsprosjekter/PDB 2794 - Immune responses aga_/Forskningsfiler/JOBO/CyTOF/Analyse i R OUS/CleanUpGatingMarch2022/Analyse/Endelig/Cytof unsupperviced/Endelig_des2022/Panel 2/All/seed 2234/MT2vsCont/IRRadjp_2234.csv")
+adj.pMT2_C <- d_temp$adj_p
+names(adj.pMT2_C) <- d_temp$cluster
+
+
+resIRR <- matrix(NA, ncol = 6, nrow = 100)
+colnames(resIRR) <- c("M T1", "S T2", "M T2", "C", "Age", "Sex")
+rownames(resIRR) <- 1:100
+i_res <- 0
+
+
+```
+
+# NK GranzB & TIM3
+#Cl 8 (NK GranzB & TIM-3)
+
+```{r,echo =F, comment= FALSE, message= FALSE}
+
+i <- "seed_2234_k_20_kluster_4"
+
+fit0 <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt)), data = d)
+fit_statusTid <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt)) + statusTid, data = d)
+fit_sex_statusTid <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt)) + statusTid + sex, data = d)
+fit_age_statusTid <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt))  + statusTid + age, data = d)
+fit_age_sex_statusTid <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt))  + statusTid + age + sex , data = d)
+
+aic_values <- AIC(fit0,  fit_statusTid, fit_sex_statusTid, fit_age_sex_statusTid, fit_age_statusTid)
+aic_values
+
+fit <- fit_statusTid
+
+
+summary(fit)
+
+est <- cbind(Estimate = coef(fit), confint(fit))
+    print("incident rate ratio")
+    print(exp(est))
+    
+    
+    i_res <- i_res + 1
+exp_est <- exp(est)
+    
+resIRR[i_res, 1] <- paste0(round(exp_est[2,1], 2), " (", round(exp_est[2,2],2), ", ", round(exp_est[2,3],2), ")")
+resIRR[i_res, 2] <- paste0(round(exp_est[3,1], 2), " (", round(exp_est[3,2],2), ", ", round(exp_est[3,3],2), ")")
+resIRR[i_res, 3] <- paste0(round(exp_est[4,1], 2), " (", round(exp_est[4,2],2), ", ", round(exp_est[4,3],2), ")")
+resIRR[i_res, 4] <- paste0(round(exp_est[5,1], 2), " (", round(exp_est[5,2],2), ", ", round(exp_est[5,3],2), ")")
+rownames(resIRR)[i_res] <- "20_4 (NK GranzB & TIM-3)"  
+
+adj.p[i]
+adj.pST1_ST2[i]
+adj.pST1_C[i]
+adj.pMT1_MT2[i]
+adj.pMT1_C[i]
+adj.pST2_MT2[i]
+adj.pST2_C[i]
+adj.pMT2_C[i]
+
+
+d$Percantage <- d[,i]/d$antall_cells_totalt * 100
+sort(d$Percantage)
+g <- ggplot(d , aes(x = statusTid, y = Percantage, fill = statusTid)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(size = 2, alpha=1, position=position_jitter(0.2), pch =1) + #, aes(col = Sex)) 
+  geom_signif(comparisons = list(c("S T1", "M T1")), map_signif_level=TRUE, annotations="*",
+               y_position = 1.9, textsize = 8, tip_length = 0.01) +
+  geom_signif(comparisons = list(c("S T1", "C")), map_signif_level=TRUE, annotations="**",
+               y_position = 1.7, textsize = 8, tip_length = 0.01) +
+  geom_signif(comparisons = list(c("S T2", "M T2")), map_signif_level=TRUE, annotations="*",
+              y_position = 1.5, textsize = 8, tip_length = 0.01) + 
+  # geom_signif(comparisons = list(c("S T2", "C")), map_signif_level=TRUE, annotations=".",
+  #             y_position = 0.015, textsize = 8, tip_length = 0.01) + 
+  ylab("PBMC (%)") + xlab("") + ylim(0, 2.1) +
+  ggtitle("Cl8 (NK GranzB & TIM-3)") +
+  # geom_vline(xintercept = 4.5) + 
+  #theme(text = element_text(size = 20))  + 
+  labs(fill = "") +  
+  theme_classic(base_size = 25) +
+  scale_fill_manual(values = colorlegend) + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
+  theme(legend.position = "none")
+
+
+
+Cl8 <- g
+tiff(fs::path(utSti, "20_4 (NK GranzB & TIM-3).tiff"), width = 500, height = 500)
+Cl8
+dev.off()
+
+Cl8
+```
+
+
+
+
+#3: CD4 CM
+# Cl 1 (CD4 CM)
+
+```{r,echo =F, comment= FALSE, message= FALSE}
+i <- "seed_2234_k_20_kluster_10"  
+
+fit0 <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt)), data = d)
+fit_statusTid <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt)) + statusTid, data = d)
+fit_sex_statusTid <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt)) + statusTid + sex, data = d)
+fit_age_statusTid <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt))  + statusTid + age, data = d)
+fit_age_sex_statusTid <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt))  + statusTid + age + sex , data = d)
+
+aic_values <- AIC(fit0,  fit_statusTid, fit_sex_statusTid, fit_age_sex_statusTid, fit_age_statusTid)
+aic_values
+
+fit <- fit_sex_statusTid
+
+summary(fit)
+
+est <- cbind(Estimate = coef(fit), confint(fit))
+    print("incident rate ratio")
+    print(exp(est))
+    
+       i_res <- i_res + 1
+exp_est <- exp(est)
+    
+resIRR[i_res, 1] <- paste0(round(exp_est[2,1], 2), " (", round(exp_est[2,2],2), ", ", round(exp_est[2,3],2), ")")
+resIRR[i_res, 2] <- paste0(round(exp_est[3,1], 2), " (", round(exp_est[3,2],2), ", ", round(exp_est[3,3],2), ")")
+resIRR[i_res, 3] <- paste0(round(exp_est[4,1], 2), " (", round(exp_est[4,2],2), ", ", round(exp_est[4,3],2), ")")
+resIRR[i_res, 4] <- paste0(round(exp_est[5,1], 2), " (", round(exp_est[5,2],2), ", ", round(exp_est[5,3],2), ")")
+resIRR[i_res, 6] <- paste0(round(exp_est[6,1], 2), " (", round(exp_est[6,2],2), ", ", round(exp_est[6,3],2), ")")
+rownames(resIRR)[i_res] <- " 20_10 (CD4 CM)"  
+
+adj.p[i]
+adj.pST1_ST2[i]
+adj.pST1_C[i]
+adj.pMT1_MT2[i]
+adj.pMT1_C[i]
+adj.pST2_MT2[i]
+adj.pST2_C[i]
+adj.pMT2_C[i]
+
+
+d$Percantage <- d[,i]/d$antall_cells_totalt * 100
+
+d2 <- d[,c("Percantage", "statusTid", "sex")]
+
+# g <- ggplot(d , aes(x = statusTid, y = Percantage, fill = statusTid, shape = sex)) +
+#   geom_boxplot(outlier.shape = NA) +
+#   geom_jitter(size = 2, alpha=1, position=position_jitter(0.2)) + #, aes(col = Sex))
+#   geom_signif(comparisons = list(c("S T1", "M T1")), map_signif_level=TRUE, annotations="*",
+#               y_position = 0.08, textsize = 8, tip_length = 0.01) +
+#   geom_signif(comparisons = list(c("S T1", "C")), map_signif_level=TRUE, annotations="***",
+#               y_position = 0.07, textsize = 8, tip_length = 0.01) +
+#   geom_signif(comparisons = list(c("S T2", "M T2")), map_signif_level=TRUE, annotations=".",
+#               y_position = 0.06, textsize = 8, tip_length = 0.01) +
+# 
+#   ylim(0,0.1)+
+#   #
+#   ylab("PBMC (%)")  + xlab("") +
+#   ggtitle("Gr 7 (CD8 CM)") +
+#   # geom_vline(xintercept = 4.5) +
+#   #theme(text = element_text(size = 20))  +
+#   labs(fill = "") +
+#   theme_classic(base_size = 25) +
+#   scale_fill_manual(values = colorlegend)  +
+#   theme(legend.position = "none")
+# 
+
+
+
+d$statusTidSex <- paste(d$statusTid, d$sex)
+d$statusTidSex <- factor(d$statusTidSex, levels = c("S T1 F", "S T1 M", "M T1 F", "M T1 M", "S T2 F", "S T2 M", "M T2 F", "M T2 M", "C F", "C M"))
+
+dTemp <- d[,c("Percantage", "statusTidSex", "sex")]
+#dTemp <- rbind(dTemp, c(NULL, "S T2 F", "F"))
+
+g <- ggplot(dTemp , aes(x = statusTidSex, y = Percantage, fill = statusTidSex)) + #, shape = sex)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(size = 2, alpha=1, position=position_jitter(0.2), pch = 1) + #, aes(col = Sex))
+     scale_shape_manual(values = sexShape) + 
+
+   geom_signif(comparisons = list(c("S T1 M", "M T1 M")), map_signif_level=TRUE, annotations="*",
+               y_position = 85, textsize = 8, tip_length = 0.01) +
+  # geom_signif(comparisons = list(c("S T1", "C")), map_signif_level=TRUE, annotations="***",
+  #             y_position = 0.07, textsize = 8, tip_length = 0.01) +
+  # geom_signif(comparisons = list(c("S T2", "M T2")), map_signif_level=TRUE, annotations=".",
+  #             y_position = 0.06, textsize = 8, tip_length = 0.01) +
+
+  # geom_signif(comparisons = list(c("S T1 M", "M T1 M")), map_signif_level=TRUE, annotations="*",
+  #             y_position = 0.08, textsize = 8, tip_length = 0.01) +
+  # geom_signif(comparisons = list(c("S T1 M", "C M")), map_signif_level=TRUE, annotations="***",
+  #             y_position = 0.07, textsize = 8, tip_length = 0.01) +
+  geom_signif(comparisons = list(c("S T2 M", "M T2 M")), map_signif_level=TRUE, annotations="*",
+              y_position = 82, textsize = 8, tip_length = 0.01) +
+ ylim(0, 90) + 
+
+  #
+  ylab("PBMC (%)")  + 
+  ggtitle("Cl1 (CD4 CM)") +
+  # geom_vline(xintercept = 4.5) +
+  #theme(text = element_text(size = 20))  +
+  labs(fill = "") + xlab("") +
+  theme_classic(base_size = 25) +
+  scale_fill_manual(values = colorlegendSex)  +
+  theme(legend.position = "none") + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) #+
+#  scale_x_discrete("", breaks=levels(d$statusTidSex), drop=FALSE, guide = guide_axis(n.dodge = 2))
+
+
+
+
+Cl1 <- g
+
+
+tiff(fs::path(utSti, "Cl 1 20_10 CD4 CM.tiff"), width = 500, height = 500)
+Cl1
+dev.off()
+
+Cl1
+```
+
+
+
+
+# 3B: CD4 CM PD-L2
+# Cl 2 (CD4 CM PD-L2)
+
+```{r,echo =F, comment= FALSE, message= FALSE}
+
+i <- "seed_2234_k_40_kluster_31"
+
+fit0 <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt)), data = d)
+fit_statusTid <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt)) + statusTid, data = d)
+fit_sex_statusTid <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt)) + statusTid + sex, data = d)
+fit_age_statusTid <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt))  + statusTid + age, data = d)
+fit_age_sex_statusTid <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt))  + statusTid + age + sex , data = d)
+
+aic_values <- AIC(fit0,  fit_statusTid, fit_sex_statusTid, fit_age_sex_statusTid, fit_age_statusTid)
+aic_values
+
+fit <- fit_age_statusTid
+
+summary(fit)
+
+est <- cbind(Estimate = coef(fit), confint(fit))
+    print("incident rate ratio")
+    print(exp(est))
+       i_res <- i_res + 1
+exp_est <- exp(est)
+    
+resIRR[i_res, 1] <- paste0(round(exp_est[2,1], 2), " (", round(exp_est[2,2],2), ", ", round(exp_est[2,3],2), ")")
+resIRR[i_res, 2] <- paste0(round(exp_est[3,1], 2), " (", round(exp_est[3,2],2), ", ", round(exp_est[3,3],2), ")")
+resIRR[i_res, 3] <- paste0(round(exp_est[4,1], 2), " (", round(exp_est[4,2],2), ", ", round(exp_est[4,3],2), ")")
+resIRR[i_res, 4] <- paste0(round(exp_est[5,1], 2), " (", round(exp_est[5,2],2), ", ", round(exp_est[5,3],2), ")")
+resIRR[i_res, 5] <- paste0(round(exp_est[6,1], 2), " (", round(exp_est[6,2],2), ", ", round(exp_est[6,3],2), ")")
+rownames(resIRR)[i_res] <- "40_31 (CD4 CM PD-L2)"
+
+adj.p[i]
+adj.pST1_ST2[i]
+adj.pST1_C[i]
+adj.pMT1_MT2[i]
+adj.pMT1_C[i]
+adj.pST2_MT2[i]
+adj.pST2_C[i]
+adj.pMT2_C[i]
+
+
+d$Percantage <- d[,i]/d$antall_cells_totalt * 100
+sort(d$Percantage)
+fit <- fit_age_statusTid
+
+  predData <- expand.grid(age= min(d$age):max(d$age), statusTid = levels(d$statusTid))
+  predData$antall_cells_totalt <- max(d$antall_cells_totalt)
+  for(n in levels(d$statusTid)){
+    min_n <- min(d$age[d$statusTid == n])
+    max_n <- max(d$age[d$statusTid == n])
+    predData$age[predData$statusTid == n & predData$age > max_n] <- NA
+    predData$age[predData$statusTid == n & predData$age < min_n] <- NA
+  }
+  predData <- predData[!is.na(predData$age),]
+  
+  pred <- predict(fit, newdata = predData, type = "response", se.fit = TRUE)
+  predData$predict <- pred$fit/max(d$antall_cells_totalt)
+  predData$pred_lower <- (pred$fit - 1.96*pred$se.fit)/max(d$antall_cells_totalt) * 100
+  predData$pred_upper <- (pred$fit + 1.96*pred$se.fit)/max(d$antall_cells_totalt) * 100
+  predData$pred_lower[predData$pred_lower < 0] <- 0
+  predData$pred_upper[predData$pred_upper > 100] <- 100
+  predData$Percantage <- predData$predict * 100
+  predData <- data.frame(predData)
+  predData$Age <- predData$age
+  i_age <- which(colnames(d) == "age")
+  i_statusTid <- which(colnames(d) == "statusTid")
+  i_Percantage = which(colnames(d) == "Percantage")
+  d2 <- d[,c(i_Percantage, i_age, i_statusTid)]  
+  colnames(d2) <- c("Percantage", "Age", "statusTid")
+  g <- ggplot(data = d2, aes(x = Age, y = Percantage, col= statusTid)) +
+    geom_line(data = predData, aes(x=Age, y = Percantage, col = statusTid), size = 2) + 
+    geom_ribbon(data = predData, aes(ymin = pred_lower, ymax = pred_upper, fill = statusTid, color = NULL), alpha = 0.3) +
+    geom_point(size = 2, pch = 1) + 
+    ylab("PBMC (%)")  +
+    ggtitle("Cl2 (CD4 CM PD-L2)") +
+    # geom_vline(xintercept = 4.5) + 
+    #theme(text = element_text(size = 20))  + 
+    labs(fill = "", col = "") +  
+    theme_classic(base_size = 25) +
+    scale_fill_manual(values = colorlegend) + 
+    scale_color_manual(values = colorlegend) +theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
+    theme(legend.position = "none") #+
+    # ggline(data =data.frame(Age = c(100,100), Percantage = c(min(predData$predict[predData$statusTid == "S T1"]), 
+    #                                                                           min(predData$predict[predData$statusTid == "S T2"]))), 
+    #                                       
+    #                                       aes( x = Age, y = Percantage))
+    # 
+  
+
+Cl2 <- g
+tiff(fs::path(utSti, "Cl 2 40_31 CD4 CM PD-L2.tiff"), width = 500, height = 500)
+Cl2
+dev.off()
+
+Cl2
+```
+
+
+# 5A: NK GranzB
+# Cl 6 (NK GranzB & IFNg)
+
+```{r,echo =F, comment= FALSE, message= FALSE}
+
+i <- "seed_2234_k_30_kluster_3"
+
+fit0 <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt)), data = d)
+fit_statusTid <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt)) + statusTid, data = d)
+fit_sex_statusTid <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt)) + statusTid + sex, data = d)
+fit_age_statusTid <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt))  + statusTid + age, data = d)
+fit_age_sex_statusTid <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt))  + statusTid + age + sex , data = d)
+
+aic_values <- AIC(fit0,  fit_statusTid, fit_sex_statusTid, fit_age_sex_statusTid, fit_age_statusTid)
+aic_values
+
+fit <- fit_statusTid
+
+
+summary(fit)
+
+est <- cbind(Estimate = coef(fit), confint(fit))
+    print("incident rate ratio")
+    print(exp(est))
+    
+    
+    i_res <- i_res + 1
+exp_est <- exp(est)
+    
+resIRR[i_res, 1] <- paste0(round(exp_est[2,1], 2), " (", round(exp_est[2,2],2), ", ", round(exp_est[2,3],2), ")")
+resIRR[i_res, 2] <- paste0(round(exp_est[3,1], 2), " (", round(exp_est[3,2],2), ", ", round(exp_est[3,3],2), ")")
+resIRR[i_res, 3] <- paste0(round(exp_est[4,1], 2), " (", round(exp_est[4,2],2), ", ", round(exp_est[4,3],2), ")")
+resIRR[i_res, 4] <- paste0(round(exp_est[5,1], 2), " (", round(exp_est[5,2],2), ", ", round(exp_est[5,3],2), ")")
+rownames(resIRR)[i_res] <- "30_3 (NK GranzB & IFNg)"
+
+
+adj.p[i]
+adj.pST1_ST2[i]
+adj.pST1_C[i]
+adj.pMT1_MT2[i]
+adj.pMT1_C[i]
+adj.pST2_MT2[i]
+adj.pST2_C[i]
+adj.pMT2_C[i]
+
+
+d$Percantage <- d[,i]/d$antall_cells_totalt * 100
+
+g <- ggplot(d , aes(x = statusTid, y = Percantage, fill = statusTid)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(size = 2, alpha=1, position=position_jitter(0.2), pch =1) + #, aes(col = Sex)) 
+  geom_signif(comparisons = list(c("S T1", "M T1")), map_signif_level=TRUE, annotations="*",
+              y_position = 64, textsize = 8, tip_length = 0.01) +
+  # geom_signif(comparisons = list(c("S T1", "C")), map_signif_level=TRUE, annotations="**",
+              # y_position = 0.12, textsize = 8, tip_length = 0.01) +
+  #  geom_signif(comparisons = list(c("M T1", "C")), map_signif_level=TRUE, annotations="***",
+  #             y_position = 0.15, textsize = 8, tip_length = 0.01) + 
+  geom_signif(comparisons = list(c("S T2", "M T2")), map_signif_level=TRUE, annotations="*",
+             y_position = 57, textsize = 8, tip_length = 0.01) + 
+  geom_signif(comparisons = list(c("S T2", "C")), map_signif_level=TRUE, annotations="*",
+               y_position = 50, textsize = 8, tip_length = 0.01) + 
+  ylab("PBMC (%)")  + xlab("") + ylim(0, 70) +
+  ggtitle("Cl6 (NK GranzB & IFNg) ") +
+  # geom_vline(xintercept = 4.5) + 
+  #theme(text = element_text(size = 20))  + 
+  labs(fill = "") +  
+  theme_classic(base_size = 25) +
+  scale_fill_manual(values = colorlegend) + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
+  theme(legend.position = "none")
+
+
+
+Cl6 <- g
+tiff(fs::path(utSti, "Cl 6 30_3 NK GranzB & IFNg.tiff"), width = 500, height = 500)
+Cl6
+dev.off()
+
+Cl6
+```
+
+
+
+
+
+# 5D: CD8 EM PD-1 
+# Cl 4 (CD8 EM PD-1)
+
+
+```{r,echo =F, comment= FALSE, message= FALSE}
+i <- "seed_2234_k_30_kluster_10"  
+
+fit0 <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt)), data = d)
+fit_statusTid <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt)) + statusTid, data = d)
+fit_sex_statusTid <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt)) + statusTid + sex, data = d)
+fit_age_statusTid <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt))  + statusTid + age, data = d)
+fit_age_sex_statusTid <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt))  + statusTid + age + sex , data = d)
+
+aic_values <- AIC(fit0,  fit_statusTid, fit_sex_statusTid, fit_age_sex_statusTid, fit_age_statusTid)
+aic_values
+
+fit <- fit_sex_statusTid
+
+summary(fit)
+
+est <- cbind(Estimate = coef(fit), confint(fit))
+    print("incident rate ratio")
+    print(exp(est))
+    
+       i_res <- i_res + 1
+exp_est <- exp(est)
+    
+resIRR[i_res, 1] <- paste0(round(exp_est[2,1], 2), " (", round(exp_est[2,2],2), ", ", round(exp_est[2,3],2), ")")
+resIRR[i_res, 2] <- paste0(round(exp_est[3,1], 2), " (", round(exp_est[3,2],2), ", ", round(exp_est[3,3],2), ")")
+resIRR[i_res, 3] <- paste0(round(exp_est[4,1], 2), " (", round(exp_est[4,2],2), ", ", round(exp_est[4,3],2), ")")
+resIRR[i_res, 4] <- paste0(round(exp_est[5,1], 2), " (", round(exp_est[5,2],2), ", ", round(exp_est[5,3],2), ")")
+resIRR[i_res, 6] <- paste0(round(exp_est[6,1], 2), " (", round(exp_est[6,2],2), ", ", round(exp_est[6,3],2), ")")
+rownames(resIRR)[i_res] <- "30_10 (CD8 EM PD-1)"  
+
+adj.p[i]
+adj.pST1_ST2[i]
+adj.pST1_C[i]
+adj.pMT1_MT2[i]
+adj.pMT1_C[i]
+adj.pST2_MT2[i]
+adj.pST2_C[i]
+adj.pMT2_C[i]
+
+
+d$Percantage <- d[,i]/d$antall_cells_totalt * 100
+sort(d$Percantage)
+d2 <- d[,c("Percantage", "statusTid", "sex")]
+
+# g <- ggplot(d , aes(x = statusTid, y = Percantage, fill = statusTid, shape = sex)) +
+#   geom_boxplot(outlier.shape = NA) +
+#   geom_jitter(size = 2, alpha=1, position=position_jitter(0.2)) + #, aes(col = Sex))
+#   geom_signif(comparisons = list(c("S T1", "M T1")), map_signif_level=TRUE, annotations="*",
+#               y_position = 0.08, textsize = 8, tip_length = 0.01) +
+#   geom_signif(comparisons = list(c("S T1", "C")), map_signif_level=TRUE, annotations="***",
+#               y_position = 0.07, textsize = 8, tip_length = 0.01) +
+#   geom_signif(comparisons = list(c("S T2", "M T2")), map_signif_level=TRUE, annotations=".",
+#               y_position = 0.06, textsize = 8, tip_length = 0.01) +
+# 
+#   ylim(0,0.1)+
+#   #
+#   ylab("PBMC (%)")  + xlab("") +
+#   ggtitle("Gr 7 (CD8 CM)") +
+#   # geom_vline(xintercept = 4.5) +
+#   #theme(text = element_text(size = 20))  +
+#   labs(fill = "") +
+#   theme_classic(base_size = 25) +
+#   scale_fill_manual(values = colorlegend)  +
+#   theme(legend.position = "none")
+# 
+
+
+
+d$statusTidSex <- paste(d$statusTid, d$sex)
+d$statusTidSex <- factor(d$statusTidSex, levels = c("S T1 F", "S T1 M", "M T1 F", "M T1 M", "S T2 F", "S T2 M", "M T2 F", "M T2 M", "C F", "C M"))
+
+dTemp <- d[,c("Percantage", "statusTidSex", "sex")]
+#dTemp <- rbind(dTemp, c(NULL, "S T2 F", "F"))
+
+g <- ggplot(dTemp , aes(x = statusTidSex, y = Percantage, fill = statusTidSex)) + #, shape = sex)) +
+   #  scale_shape_manual(values = sexShape) + 
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(size = 2, alpha=1, position=position_jitter(0.2), pch = 1) + #, aes(col = Sex))
+   geom_signif(comparisons = list(c("S T1 M", "M T1 M")), map_signif_level=TRUE, annotations="*",
+               y_position = 14.5, textsize = 8, tip_length = 0.01) +
+   geom_signif(comparisons = list(c("S T1 M", "C M")), map_signif_level=TRUE, annotations="***",
+               y_position = 13, textsize = 8, tip_length = 0.01) +
+   # geom_signif(comparisons = list(c("M T1 M", "M T2 M")), map_signif_level=TRUE, annotations="***",
+   #             y_position = 0.26, textsize = 8, tip_length = 0.01) +
+   # geom_signif(comparisons = list(c("M T1 M", "C M")), map_signif_level=TRUE, annotations="***",
+   #             y_position = 0.24, textsize = 8, tip_length = 0.01) +
+    geom_signif(comparisons = list(c("S T2 M", "M T2 M")), map_signif_level=TRUE, annotations="*",
+               y_position = 11.5, textsize = 8, tip_length = 0.01) +  
+
+  geom_signif(comparisons = list(c("S T2 M", "C M")), map_signif_level=TRUE, annotations="*",
+               y_position = 10, textsize = 8, tip_length = 0.01) + ylim(0, 16) +
+ 
+  #
+  ylab("PBMC (%)")  + xlab("") +
+  ggtitle("Cl4 (CD8 EM PD-1)") +
+  # geom_vline(xintercept = 4.5) +
+  #theme(text = element_text(size = 20))  +
+  labs(fill = "") +
+  theme_classic(base_size = 25) +
+  scale_fill_manual(values = colorlegendSex)  +
+  theme(legend.position = "none") + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) #+
+  #scale_x_discrete("", breaks=levels(d$statusTidSex), drop=FALSE, guide = guide_axis(n.dodge = 2))
+
+
+
+
+Cl4 <- g
+
+
+tiff(fs::path(utSti, "Cl 4 30_10 CD8 EM PD-1.tiff"), width = 500, height = 500)
+Cl4
+dev.off()
+
+Cl4
+```
+
+
+
+# 5Ca: NK
+# Cl 7 (NK GranzB)
+
+
+```{r,echo =F, comment= FALSE, message= FALSE}
+i <- "seed_2234_k_50_kluster_5"  
+
+fit0 <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt)), data = d)
+fit_statusTid <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt)) + statusTid, data = d)
+fit_sex_statusTid <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt)) + statusTid + sex, data = d)
+fit_age_statusTid <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt))  + statusTid + age, data = d)
+fit_age_sex_statusTid <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt))  + statusTid + age + sex , data = d)
+
+aic_values <- AIC(fit0,  fit_statusTid, fit_sex_statusTid, fit_age_sex_statusTid, fit_age_statusTid)
+aic_values
+
+fit <- fit_sex_statusTid
+
+summary(fit)
+
+est <- cbind(Estimate = coef(fit), confint(fit))
+    print("incident rate ratio")
+    print(exp(est))
+    
+       i_res <- i_res + 1
+exp_est <- exp(est)
+    
+resIRR[i_res, 1] <- paste0(round(exp_est[2,1], 2), " (", round(exp_est[2,2],2), ", ", round(exp_est[2,3],2), ")")
+resIRR[i_res, 2] <- paste0(round(exp_est[3,1], 2), " (", round(exp_est[3,2],2), ", ", round(exp_est[3,3],2), ")")
+resIRR[i_res, 3] <- paste0(round(exp_est[4,1], 2), " (", round(exp_est[4,2],2), ", ", round(exp_est[4,3],2), ")")
+resIRR[i_res, 4] <- paste0(round(exp_est[5,1], 2), " (", round(exp_est[5,2],2), ", ", round(exp_est[5,3],2), ")")
+resIRR[i_res, 6] <- paste0(round(exp_est[6,1], 2), " (", round(exp_est[6,2],2), ", ", round(exp_est[6,3],2), ")")
+rownames(resIRR)[i_res] <- "50_5 (NK GranzB)"  
+
+adj.p[i]
+adj.pST1_ST2[i]
+adj.pST1_C[i]
+adj.pMT1_MT2[i]
+adj.pMT1_C[i]
+adj.pST2_MT2[i]
+adj.pST2_C[i]
+adj.pMT2_C[i]
+
+
+d$Percantage <- d[,i]/d$antall_cells_totalt * 100
+sort(d$Percantage)
+d2 <- d[,c("Percantage", "statusTid", "sex")]
+
+d$statusTidSex <- paste(d$statusTid, d$sex)
+d$statusTidSex <- factor(d$statusTidSex, levels = c("S T1 F", "S T1 M", "M T1 F", "M T1 M", "S T2 F", "S T2 M", "M T2 F", "M T2 M", "C F", "C M"))
+
+dTemp <- d[,c("Percantage", "statusTidSex", "sex")]
+#dTemp <- rbind(dTemp, c(NULL, "S T2 F", "F"))
+
+g <- ggplot(dTemp , aes(x = statusTidSex, y = Percantage, fill = statusTidSex)) + #, shape = sex)) +
+   #  scale_shape_manual(values = sexShape) + 
+
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(size = 2, alpha=1, position=position_jitter(0.2), pch = 1) + #, aes(col = Sex))
+   geom_signif(comparisons = list(c("S T1 M", "M T1 M")), map_signif_level=TRUE, annotations="*",
+               y_position = 15, textsize = 8, tip_length = 0.01) +
+   geom_signif(comparisons = list(c("S T1 M", "C M")), map_signif_level=TRUE, annotations="**",
+               y_position = 14, textsize = 8, tip_length = 0.01) +
+   # geom_signif(comparisons = list(c("M T1 M", "M T2 M")), map_signif_level=TRUE, annotations="***",
+   #             y_position = 0.26, textsize = 8, tip_length = 0.01) +
+   # geom_signif(comparisons = list(c("M T1 M", "C M")), map_signif_level=TRUE, annotations="***",
+   #             y_position = 0.24, textsize = 8, tip_length = 0.01) +
+     # geom_signif(comparisons = list(c("S T2 M", "M T2 M")), map_signif_level=TRUE, annotations=".",
+     #            y_position = 13, textsize = 8, tip_length = 0.01) +
+  # 
+  # geom_signif(comparisons = list(c("S T2 M", "C M")), map_signif_level=TRUE, annotations="*",
+  #              y_position = 0.10, textsize = 8, tip_length = 0.01) +
+ 
+  #
+  ylab("PBMC (%)")  + ylim(0, 16.5) + xlab("")+
+  ggtitle("Cl7 (NK GranzB) ") +
+  # geom_vline(xintercept = 4.5) +
+  #theme(text = element_text(size = 20))  +
+  labs(fill = "") +
+  scale_y_break(c(7, 13.5), ticklabels = 14)  +
+  theme_classic(base_size = 25) +
+  scale_fill_manual(values = colorlegendSex)  +
+  theme(legend.position = "none") + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) #+
+ # scale_x_discrete("", breaks=levels(d$statusTidSex), drop=FALSE, guide = guide_axis(n.dodge = 2))
+
+
+
+
+Cl7 <- g
+
+
+tiff(fs::path(utSti, "Cl 7 50_5 NK GranzB.tiff"), width = 500, height = 500)
+Cl7
+dev.off()
+
+Cl7
+```
+
+
+
+# 5Cb CD8 TEMRA GranzB
+# Cl 5 (CD8 TEMRA GranzB)
+
+```{r,echo =F, comment= FALSE, message= FALSE}
+i <- "seed_2234_k_50_kluster_19"  
+
+fit0 <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt)), data = d)
+fit_statusTid <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt)) + statusTid, data = d)
+fit_sex_statusTid <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt)) + statusTid + sex, data = d)
+fit_age_statusTid <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt))  + statusTid + age, data = d)
+fit_age_sex_statusTid <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt))  + statusTid + age + sex , data = d)
+
+aic_values <- AIC(fit0,  fit_statusTid, fit_sex_statusTid, fit_age_sex_statusTid, fit_age_statusTid)
+aic_values
+
+fit <- fit_sex_statusTid
+
+summary(fit)
+
+est <- cbind(Estimate = coef(fit), confint(fit))
+    print("incident rate ratio")
+    print(exp(est))
+    
+       i_res <- i_res + 1
+exp_est <- exp(est)
+    
+resIRR[i_res, 1] <- paste0(round(exp_est[2,1], 2), " (", round(exp_est[2,2],2), ", ", round(exp_est[2,3],2), ")")
+resIRR[i_res, 2] <- paste0(round(exp_est[3,1], 2), " (", round(exp_est[3,2],2), ", ", round(exp_est[3,3],2), ")")
+resIRR[i_res, 3] <- paste0(round(exp_est[4,1], 2), " (", round(exp_est[4,2],2), ", ", round(exp_est[4,3],2), ")")
+resIRR[i_res, 4] <- paste0(round(exp_est[5,1], 2), " (", round(exp_est[5,2],2), ", ", round(exp_est[5,3],2), ")")
+resIRR[i_res, 6] <- paste0(round(exp_est[6,1], 2), " (", round(exp_est[6,2],2), ", ", round(exp_est[6,3],2), ")")
+rownames(resIRR)[i_res] <- "50_19 (CD8 TEMRA GranzB)"  
+
+adj.p[i]
+adj.pST1_ST2[i]
+adj.pST1_C[i]
+adj.pMT1_MT2[i]
+adj.pMT1_C[i]
+adj.pST2_MT2[i]
+adj.pST2_C[i]
+adj.pMT2_C[i]
+
+
+d$Percantage <- d[,i]/d$antall_cells_totalt * 100
+
+d2 <- d[,c("Percantage", "statusTid", "sex")]
+
+d$statusTidSex <- paste(d$statusTid, d$sex)
+d$statusTidSex <- factor(d$statusTidSex, levels = c("S T1 F", "S T1 M", "M T1 F", "M T1 M", "S T2 F", "S T2 M", "M T2 F", "M T2 M", "C F", "C M"))
+
+dTemp <- d[,c("Percantage", "statusTidSex", "sex")]
+#dTemp <- rbind(dTemp, c(NULL, "S T2 F", "F"))
+
+g <- ggplot(dTemp , aes(x = statusTidSex, y = Percantage, fill = statusTidSex)) + #, shape = sex)) +
+#     scale_shape_manual(values = sexShape) + 
+
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(size = 2, alpha=1, position=position_jitter(0.2), pch = 1) + #, aes(col = Sex))
+   geom_signif(comparisons = list(c("S T1 M", "M T1 M")), map_signif_level=TRUE, annotations="**",
+               y_position = 15, textsize = 8, tip_length = 0.01) +
+   geom_signif(comparisons = list(c("S T1 M", "C M")), map_signif_level=TRUE, annotations="*",
+               y_position = 14.5, textsize = 8, tip_length = 0.01) +
+   # geom_signif(comparisons = list(c("M T1 M", "M T2 M")), map_signif_level=TRUE, annotations="***",
+   #             y_position = 0.26, textsize = 8, tip_length = 0.01) +
+   # geom_signif(comparisons = list(c("M T1 M", "C M")), map_signif_level=TRUE, annotations=".",
+   #             y_position = 14, textsize = 8, tip_length = 0.01) +
+   #   # geom_signif(comparisons = list(c("S T2", "M T2")), map_signif_level=TRUE, annotations=".",
+     #            y_position = 0.14, textsize = 8, tip_length = 0.01) +
+  # 
+  # geom_signif(comparisons = list(c("S T2 M", "C M")), map_signif_level=TRUE, annotations="*",
+  #              y_position = 0.10, textsize = 8, tip_length = 0.01) +
+ scale_y_break(c(4, 13.5), ticklabels = 14)  +
+  
+  #
+  ylab("PBMC (%)")  + ylim(0, 16) + xlab("") +
+  ggtitle("Cl5 (CD8 TEMRA GranzB)") +
+  # geom_vline(xintercept = 4.5) +
+  #theme(text = element_text(size = 20))  +
+  labs(fill = "") +
+  theme_classic(base_size = 25) +
+  scale_fill_manual(values = colorlegendSex)  +
+  theme(legend.position = "none") + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) #+
+  #scale_x_discrete("", breaks=levels(d$statusTidSex), drop=FALSE, guide = guide_axis(n.dodge = 2))
+
+
+
+
+Cl5 <- g
+
+
+tiff(fs::path(utSti, "Cl5 50_19 CD8 TEMRA GranzB.tiff"), width = 500, height = 500)
+Cl5
+dev.off()
+
+Cl5
+```
+
+
+
+
+
+
+# 9: CD4 CM CD137
+# Cl 3 (CD4 CM CD137)
+
+```{r,echo =F, comment= FALSE, message= FALSE}
+
+i <- "seed_2234_k_20_kluster_8"
+
+fit0 <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt)), data = d)
+fit_statusTid <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt)) + statusTid, data = d)
+fit_sex_statusTid <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt)) + statusTid + sex, data = d)
+fit_age_statusTid <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt))  + statusTid + age, data = d)
+fit_age_sex_statusTid <- glm.nb((d[,i] ) ~ offset(log(antall_cells_totalt))  + statusTid + age + sex , data = d)
+
+aic_values <- AIC(fit0,  fit_statusTid, fit_sex_statusTid, fit_age_sex_statusTid, fit_age_statusTid)
+aic_values
+
+fit <- fit_statusTid
+
+
+summary(fit)
+
+est <- cbind(Estimate = coef(fit), confint(fit))
+    print("incident rate ratio")
+    print(exp(est))
+    
+    
+    i_res <- i_res + 1
+exp_est <- exp(est)
+    
+resIRR[i_res, 1] <- paste0(round(exp_est[2,1], 2), " (", round(exp_est[2,2],2), ", ", round(exp_est[2,3],2), ")")
+resIRR[i_res, 2] <- paste0(round(exp_est[3,1], 2), " (", round(exp_est[3,2],2), ", ", round(exp_est[3,3],2), ")")
+resIRR[i_res, 3] <- paste0(round(exp_est[4,1], 2), " (", round(exp_est[4,2],2), ", ", round(exp_est[4,3],2), ")")
+resIRR[i_res, 4] <- paste0(round(exp_est[5,1], 2), " (", round(exp_est[5,2],2), ", ", round(exp_est[5,3],2), ")")
+rownames(resIRR)[i_res] <- "20_8 (CD4 CM CD137)"
+
+
+adj.p[i]
+adj.pST1_ST2[i]
+adj.pST1_C[i]
+adj.pMT1_MT2[i]
+adj.pMT1_C[i]
+adj.pST2_MT2[i]
+adj.pST2_C[i]
+adj.pMT2_C[i]
+
+
+d$Percantage <- d[,i]/d$antall_cells_totalt * 100
+sort(d$Percantage)
+g <- ggplot(d , aes(x = statusTid, y = Percantage, fill = statusTid)) +
+  geom_boxplot(outlier.shape = NA) +
+   geom_jitter(size = 2, alpha=1, position=position_jitter(0.2), pch =1) + #, aes(col = Sex)) 
+   geom_signif(comparisons = list(c("S T1", "M T1")), map_signif_level=TRUE, annotations="*",
+              y_position = 6.5, textsize = 8, tip_length = 0.01) +
+  #  geom_signif(comparisons = list(c("S T1", "C")), map_signif_level=TRUE, annotations=".",
+  #               y_position = 7, textsize = 8, tip_length = 0.01) +
+  #  # geom_signif(comparisons = list(c("M T1", "C")), map_signif_level=TRUE, annotations="**",
+  #  #            y_position = 0.0055, textsize = 8, tip_length = 0.01) +
+  # geom_signif(comparisons = list(c("S T2", "M T2")), map_signif_level=TRUE, annotations=".",
+  #            y_position = 6.5, textsize = 8, tip_length = 0.01) +
+   geom_signif(comparisons = list(c("S T2", "C")), map_signif_level=TRUE, annotations="*",
+                y_position = 6, textsize = 8, tip_length = 0.01) + 
+   # geom_signif(comparisons = list(c("M T2", "C")), map_signif_level=TRUE, annotations=".",
+   #              y_position = 0.0045, textsize = 8, tip_length = 0.01) + 
+  ylab("PBMC (%)")  + xlab("") + ylim(0, 7) +
+  ggtitle("Cl3 (CD4 CM CD137) ") +
+  # geom_vline(xintercept = 4.5) + 
+  #theme(text = element_text(size = 20))  + 
+  labs(fill = "") +  
+  theme_classic(base_size = 25) +
+  scale_fill_manual(values = colorlegend) + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
+  theme(legend.position = "none")
+
+
+
+Cl3 <- g
+tiff(fs::path(utSti, "Cl3 20_8 CD4 CM CD137.tiff"), width = 500, height = 500)
+Cl3
+dev.off()
+
+Cl3
+```
+
+
+
+
+
+```{r, echo = F}
+
+g <- ggarrange(Cl1, Cl2, Cl3, Cl4, Cl5, Cl6, Cl7, Cl8, ncol = 2, nrow = 4)
+
+
+
+tiff(fs::path(utSti, "P2_T1 box plots_2times4.tiff"), width = 1000, height = 1800)
+g
+dev.off()
+
+g
+```
+
+
+
+
+```{r, echo = F}
+
+g <- ggarrange(Cl1, Cl2, Cl3, Cl4, Cl5, Cl6, Cl7, Cl8, ncol = 3, nrow = 3)
+
+
+
+tiff(fs::path(utSti, "P2_T1 box plots_3times3.tiff"), width = 1500, height = 1350)
+g
+dev.off()
+
+g
+```
+
+
+
+
+
+
+
+
+```{r,echo =F, comment= FALSE, message= FALSE}
+write.csv2(resIRR[1:i_res,], fs::path(utSti, "IRR_per_gruppe.csv"))
+
+
+```
+
+
+

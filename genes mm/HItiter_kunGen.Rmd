@@ -1,0 +1,318 @@
+---
+title: "HI titer"
+author: "Anja Bråthen Kristoffersen"
+
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+last run:
+```{r, echo = F}
+Sys.Date()
+```
+
+
+# all data
+
+## logistisk regression med cutoff på 50
+```{r, echo = F}
+library(ggplot2)
+
+analyseSti <- fs::path("F:", "Forskningsprosjekter", "PDB 2794 - Immune responses aga_", "Forskningsfiler", "JOBO", "CyTOF", "Analyse i R OUS", "CleanUpGatingMarch2022", "Analyse", "Endelig")
+gendataSti <- fs::path("F:", "Forskningsprosjekter", "PDB 2794 - Immune responses aga_", "Forskningsfiler", "JOBO", "CyTOF", "Analyse i R OUS", "CleanUpGatingMarch2022", "Analyse", "gen")
+dGener <- read.csv2(fs::path(gendataSti,  "dGener.csv"))
+d <- read.csv2(fs::path(analyseSti, "elisa_mm_status.csv"))
+d$StatusTid <- NULL
+dG2 <- dGener[, c("ID_tid",  "Status_tid")]
+d <- merge(d, dG2, by.x= "Pasientnr", by.y = "ID_tid")
+#d <- d[d$Pasientnr %in% dGener$ID_tid,]
+d$StatusTid <- d$Status_tid
+d$StatusTid <- factor(d$StatusTid, levels = c("Severe T1", "Moderate T1", "Severe T2", "Moderate T2", "Control"))
+table(d$StatusTid)
+summary(d$HI.homolog)
+
+d$HI.homolog.posneg <- 0
+d$HI.homolog.posneg[d$HI.homolog > 50] <- 1
+d$HI.homolog.posneg[is.na(d$HI.homolog)] <- NA
+
+
+
+
+d$sex <- "M"
+d$sex[d$Female == 1] <- "F"
+plot(sort(d$HI.homolog))
+lines(c(0,500), c(50, 50))
+
+table(d$HI.homolog.posneg, d$StatusTid)
+
+fit <- glm(HI.homolog.posneg ~ StatusTid + Alder + Female, family = "binomial",data = d)
+summary(fit)
+
+ggplot(d, aes(x = StatusTid, y = HI.homolog, by = StatusTid)) +
+  geom_boxplot(outlier.shape = NA) + 
+  geom_jitter(size = 2, alpha=0.3, position=position_jitter(0.2),aes(col = sex)) +
+  geom_abline(slope = 0, intercept = 50)
+
+```
+
+
+## log normal regression
+
+```{r, echo = F}
+
+fit <- glm(log(HI.homolog) ~ StatusTid + Alder + Female, data = d)
+summary(fit)
+```
+
+
+
+## ingen forskjell innen T1
+```{r, echo = T}
+wilcox.test(d$HI.homolog[d$StatusTid == "Severe T1"], d$HI.homolog[d$StatusTid == "Moderate T1"])
+```
+
+## ingen forskjell innen T2
+```{r, echo = T}
+wilcox.test(d$HI.homolog[d$StatusTid == "Severe T2"], d$HI.homolog[d$StatusTid == "Moderate T2"])
+```
+
+## forskjell mellom T1 og T2
+```{r, echo = T}
+wilcox.test(d$HI.homolog[d$Tid == "T1"], d$HI.homolog[d$Tid == "T2"])
+```
+
+## summary T1
+
+```{r, echo = FALSE}
+summary(d$HI.homolog[d$Tid == "T1"])
+```
+
+## summary T2
+
+```{r, echo = FALSE}
+summary(d$HI.homolog[d$Tid == "T2"])
+```
+## fold change median(T2)/median(T1)
+på verdiene (ikke log???)
+```{r, echo = FALSE}
+median(d$HI.homolog[d$Tid == "T2"], na.rm = T)/median(d$HI.homolog[d$Tid == "T1"], na.rm = T)
+```
+
+## log fold change median(T2)/median(T1)
+```{r, echo = FALSE}
+median(log(d$HI.homolog[d$Tid == "T2"]), na.rm = T)/median(log(d$HI.homolog[d$Tid == "T1"]), na.rm = T)
+```
+
+# H3N2
+
+```{r}
+dAll <- d
+d <- dAll[dAll$Subgr == "H3", ]
+```
+
+
+## logistisk regression med cutoff på 50
+```{r, echo = F}
+
+table(d$HI.homolog.posneg, d$StatusTid)
+
+fit <- glm(HI.homolog.posneg ~ StatusTid + Alder + Female, family = "binomial",data = d)
+summary(fit)
+
+ggplot(d, aes(x = StatusTid, y = HI.homolog, by = StatusTid)) +
+  geom_boxplot(outlier.shape = NA) + 
+  geom_jitter(size = 2, alpha=0.3, position=position_jitter(0.2),aes(col = sex)) +
+  geom_abline(slope = 0, intercept = 50)
+
+```
+
+## log normal regression
+
+```{r, echo = F}
+
+fit <- glm(log(HI.homolog) ~ StatusTid + Alder + Female, data = d)
+summary(fit)
+```
+
+## ingen forskjell innen T1
+```{r, echo =T}
+wilcox.test(d$HI.homolog[d$StatusTid == "Severe T1"], d$HI.homolog[d$StatusTid == "Moderate T1"])
+```
+
+## ingen forskjell innen T2
+```{r, echo = T}
+wilcox.test(d$HI.homolog[d$StatusTid == "Severe T2"], d$HI.homolog[d$StatusTid == "Moderate T2"])
+```
+
+## forskjell mellom T1 og T2
+```{r, echo = T}
+wilcox.test(d$HI.homolog[d$Tid == "T1"], d$HI.homolog[d$Tid == "T2"])
+```
+
+## summary T1
+
+```{r, echo = FALSE}
+summary(d$HI.homolog[d$Tid == "T1"])
+```
+
+## summary T2
+
+```{r, echo = FALSE}
+summary(d$HI.homolog[d$Tid == "T2"])
+```
+
+## fold change median(T2)/median(T1)
+på verdiene (ikke log???)
+```{r, echo = FALSE}
+median(d$HI.homolog[d$Tid == "T2"], na.rm = T)/median(d$HI.homolog[d$Tid == "T1"], na.rm = T)
+```
+
+## log fold change median(T2)/median(T1)
+```{r, echo = FALSE}
+median(log(d$HI.homolog[d$Tid == "T2"]), na.rm = T)/median(log(d$HI.homolog[d$Tid == "T1"]), na.rm = T)
+```
+
+
+# H1N1
+
+```{r}
+d <- dAll[dAll$Subgr == "H1N1", ]
+```
+
+
+## logistisk regression med cutoff på 50
+```{r, echo = F}
+
+table(d$HI.homolog.posneg, d$StatusTid)
+
+fit <- glm(HI.homolog.posneg ~ StatusTid + Alder + Female, family = "binomial",data = d)
+summary(fit)
+
+ggplot(d, aes(x = StatusTid, y = HI.homolog, by = StatusTid)) +
+  geom_boxplot(outlier.shape = NA) + 
+  geom_jitter(size = 2, alpha=0.3, position=position_jitter(0.2),aes(col = sex)) +
+  geom_abline(slope = 0, intercept = 50)
+
+```
+
+## log normal regression
+
+```{r, echo = F}
+
+fit <- glm(log(HI.homolog) ~ StatusTid + Alder + Female, data = d)
+summary(fit)
+```
+
+## ingen forskjell innen T1
+```{r, echo = T}
+wilcox.test(d$HI.homolog[d$StatusTid == "Severe T1"], d$HI.homolog[d$StatusTid == "Moderate T1"])
+```
+
+## ingen forskjell innen T2
+```{r, echo = T}
+wilcox.test(d$HI.homolog[d$StatusTid == "Severe T2"], d$HI.homolog[d$StatusTid == "Moderate T2"])
+```
+
+## ingen forskjell mellom T1 og T2
+```{r, echo = T}
+wilcox.test(d$HI.homolog[d$Tid == "T1"], d$HI.homolog[d$Tid == "T2"])
+```
+
+## summary T1
+
+```{r, echo = FALSE}
+summary(d$HI.homolog[d$Tid == "T1"])
+```
+
+## summary T2
+
+```{r, echo = FALSE}
+summary(d$HI.homolog[d$Tid == "T2"])
+```
+
+## fold change median(T2)/median(T1)
+på verdiene (ikke log???)
+```{r, echo = FALSE}
+median(d$HI.homolog[d$Tid == "T2"], na.rm = T)/median(d$HI.homolog[d$Tid == "T1"], na.rm = T)
+```
+
+
+## log fold change median(T2)/median(T1)
+```{r, echo = FALSE}
+median(log(d$HI.homolog[d$Tid == "T2"]), na.rm = T)/median(log(d$HI.homolog[d$Tid == "T1"]), na.rm = T)
+```
+
+
+# B
+
+```{r}
+d <- dAll[dAll$Subgr == "B", ]
+```
+
+
+## logistisk regression med cutoff på 50
+```{r, echo = F}
+
+table(d$HI.homolog.posneg, d$StatusTid)
+
+fit <- glm(HI.homolog.posneg ~ StatusTid + Alder + Female, family = "binomial",data = d)
+summary(fit)
+
+ggplot(d, aes(x = StatusTid, y = HI.homolog, by = StatusTid)) +
+  geom_boxplot(outlier.shape = NA) + 
+  geom_jitter(size = 2, alpha=0.3, position=position_jitter(0.2),aes(col = sex)) +
+  geom_abline(slope = 0, intercept = 50)
+
+```
+
+## log normal regression
+
+```{r, echo = F}
+
+fit <- glm(log(HI.homolog) ~ StatusTid + Alder + Female, data = d)
+summary(fit)
+```
+
+## ingen forskjell innen T1
+```{r, echo = FALSE}
+wilcox.test(d$HI.homolog[d$StatusTid == "Severe T1"], d$HI.homolog[d$StatusTid == "Moderate T1"])
+```
+
+## ingen forskjell innen T2
+```{r, echo = FALSE}
+wilcox.test(d$HI.homolog[d$StatusTid == "Severe T2"], d$HI.homolog[d$StatusTid == "Moderate T2"])
+```
+
+## ingen forskjell mellom T1 og T2
+```{r, echo = FALSE}
+wilcox.test(d$HI.homolog[d$Tid == "T1"], d$HI.homolog[d$Tid == "T2"])
+```
+
+## summary T1
+
+```{r, echo = FALSE}
+summary(d$HI.homolog[d$Tid == "T1"])
+```
+
+## summary T2
+
+```{r, echo = FALSE}
+summary(d$HI.homolog[d$Tid == "T2"])
+```
+
+## fold change median(T2)/median(T1)
+på verdiene (ikke log???)
+```{r, echo = FALSE}
+median(d$HI.homolog[d$Tid == "T2"], na.rm = T)/median(d$HI.homolog[d$Tid == "T1"], na.rm = T)
+```
+
+
+## log fold change median(T2)/median(T1)
+```{r, echo = FALSE}
+median(log(d$HI.homolog[d$Tid == "T2"]), na.rm = T)/median(log(d$HI.homolog[d$Tid == "T1"]), na.rm = T)
+```
+

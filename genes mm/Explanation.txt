@@ -1,0 +1,16 @@
+linestack plot based on log fold change and wilcoxon test is analysed in vulcanoPlot_fdrENDELIG.Rmd
+
+run_gener_fdr.R source gen_analyse.Rmd for different combinations of analysis only genes that are significantly different between 
+the two first status-timepoints is kept for each analysis. 
+
+CXCL13_kunGener.Rmd includes different wilcoxon test and attempt on regression.
+
+elispot_kunGener.Rmd includes wilcoxon test and linear regression.
+
+HItiter_kunGen.Rmd includes wilcoxon test and linear regression.
+
+hititter_og_elispot_parret.Rmd includes paired Wilcoxon test
+
+
+
+ 

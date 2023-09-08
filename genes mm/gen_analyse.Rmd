@@ -1,0 +1,344 @@
+---
+title: ""
+author: "Anja Bråthen Kristoffersen"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo = F}
+print(paste0("date run: ", Sys.Date()))
+print(gsub(".csv", "", params$utFil))
+
+convert <- function(adj){
+  res <- ""
+  if(adj < 0.1){
+    res <- "."
+  }
+  if(adj < 0.05){
+    res <- "*"
+  }
+  if(adj < 0.01){
+    res <- "**"
+  }
+  if(adj < 0.001){
+    res <- "***"
+  }
+  return(res)
+}
+
+coeff_and_p <- function(adj, coef){
+  res <- rep(NA, length(adj))
+  for(i in 1:length(res)){
+    res[i] <- paste(coef[i], convert(adj[i]))
+  }
+  return(res)
+} 
+
+library(ggplot2)
+
+analyseSti <- fs::path("F:", "Forskningsprosjekter", "PDB 2794 - Immune responses aga_", "Forskningsfiler", "JOBO", "CyTOF", "Analyse i R OUS", "CleanUpGatingMarch2022", "Analyse", "gen")
+
+d <- read.csv2(fs::path(analyseSti, "dGener.csv"))
+
+if(!is.null(params$subgr)){
+  if(params$subgr == "H3"){
+    d <- d[d$Subgr == "H3",]
+  }
+  if(params$subgr == "H1N1"){
+    d <- d[d$Subgr == "H1N1",]
+  }
+  if(params$subgr == "B"){
+    d <- d[d$Subgr == "B",]
+  }
+  if(params$subgr == "H3_control"){
+    d <- d[d$Subgr %in% c("H3", "control"),]
+  }
+
+}
+
+
+fra <- which(colnames(d) == "AIRE")
+til <- which(colnames(d) == "ZNF532")
+
+if(!is.null(params$outliers)){
+for(i in fra:til){
+  x <- d[,i]
+  max_value <- mean(x) + 2*sd(x)
+  d[d[,i] > max_value, i] <- max_value
+}
+}
+
+
+d$Status_Tid <- d$Status_tid
+
+if(is.null(params$nivaaer[1])){
+  d$Status_Tid <- factor(d$Status_Tid, levels = c("Severe T1", "Moderate T1", "Severe T2", "Moderate T2","Control" ))
+} else {
+  d$Status_Tid <- factor(d$Status_Tid, levels = params$nivaaer)
+}
+
+d$Sex <- "M"
+d$Sex[d$Female == 1] <- "F"
+
+
+
+gener <- fra:til
+
+
+print("number of samples:")
+nrow(d)
+print("distribution of samples")
+table(d$Status_Tid)
+
+d$Status_Tid_Sex <- paste(d$Status_Tid, d$Sex)
+
+if(is.null(params$nivaaer[1])){
+   d$Status_Tid_Sex <- factor(d$Status_Tid_Sex, levels = c( "Severe T1 M", "Severe T1 F", "Moderate T1 M",  "Moderate T1 F",  "Severe T2 M",  "Severe T2 F",  "Moderate T2 M", "Moderate T2 F",  "Control M"  , "Control F"))
+} else {
+  d$Status_Tid_Sex <- factor(d$Status_Tid_Sex, levels = params$nivaaerSex)
+}
+
+
+```
+
+
+
+
+```{r, echo = F, fig.width= 15, fig.height=8}
+p <- rep(NA, length(gener))
+
+resTab <- as.data.frame(matrix(NA, ncol = 8, nrow = 1000))
+colnames(resTab) <- c("gen", levels(d$Status_Tid)[-1], "Age", "Sex = M", "Adj.R.sq")
+resTab_i <- 0
+
+
+p <- rep(NA, length(gener))
+names(p) <- gener
+
+for(ii in 1:length(gener)){
+  i <- gener[ii]
+
+  fit1 <- glm(d[,i]  ~ Status_Tid + Age + Sex , data = d)
+  fit2 <- glm(d[,i]  ~  Status_Tid + Age  , data = d)
+  fit3 <- glm(d[,i]  ~ Status_Tid  + Sex , data = d)
+  fit4 <- glm(d[,i]  ~  Status_Tid   , data = d)
+  
+ p[ii] <- min(summary(fit1)$coeff[2,4], summary(fit2)$coeff[2,4], summary(fit3)$coeff[2,4], summary(fit4)$coeff[2,4])
+}
+
+
+adj_p <- p.adjust(p, params$adj_p_methods)
+
+
+mulige_gener <- gener[adj_p < params$adj_p]
+mulige_gener_i <- which(adj_p < params$adj_p)
+
+fit <- NULL
+if(length(mulige_gener) > 0){
+for(i in 1:length(mulige_gener)){
+  ii <- mulige_gener[i]
+  if(exists("g")){
+     rm(g)
+     
+   }
+  
+  fit0 <- glm(d[,ii] ~ 1, data = d)
+  fit1 <- glm(d[,ii] ~ Age , data = d)
+  fit2 <- glm(d[,ii] ~  Sex , data = d)
+  fit3 <- glm(d[,ii] ~  Status_Tid, data = d)
+  fit4 <- glm(d[,ii] ~ Age + Sex , data = d)
+  fit5 <- glm(d[,ii] ~ Status_Tid + Age , data = d)
+  fit6 <- glm(d[,ii] ~ Status_Tid_Sex, data = d)
+  fit7 <- glm(d[,ii] ~ Age + Status_Tid_Sex, data = d)
+  fit6a <- glm(d[,ii] ~ Status_Tid + Sex, data = d)
+  fit7a <- glm(d[,ii] ~ Status_Tid + Age +Sex, data = d)
+  aic_values <-  AIC(fit0, fit1, fit2, fit3, fit4, fit5, fit6a, fit7a)
+  min_aic_values <- min(aic_values$AIC)
+
+
+        
+ if(aic_values["fit3", "AIC"] < (min_aic_values+2)){
+      fit <- fit3
+      predData <- expand.grid(Status_Tid = levels(d$Status_Tid))
+      pred <- predict(fit, newdata = predData, type = "response", se.fit = TRUE)
+      predData$predict <- pred$fit
+      predData$pred_lower <- (pred$fit - 1.96*pred$se.fit) 
+      predData$pred_upper <- (pred$fit + 1.96*pred$se.fit) 
+      predData$pred_lower[predData$pred_lower < 7.64] <- 7.64
+      predData$predict[predData$predict < 7.64] <- 7.64
+  
+      predData$gen <- predData$predict
+          
+         predData <- data.frame(predData)
+         i_Status_Tid <- which(colnames(d) == "Status_Tid")
+         i_Sex <- which(colnames(d) == "Sex")
+         i_gen <- ii
+         d2 <- d[,c(i_gen, i_Status_Tid, i_Sex)] 
+         colnames(d2) <- c("gen", "Status_Tid", "Sex")
+          g <- ggplot(d2 , aes(x = Status_Tid, y = gen)) +
+               geom_boxplot(outlier.shape = NA) + 
+               geom_jitter(size = 2, alpha=0.3, position=position_jitter(0.2), aes(col = Sex)) +
+               geom_errorbar(data = predData, aes(ymin = pred_lower, ymax = pred_upper, col = paste("predicted")), width = 0.2, position = position_dodge(0.9)) + 
+               geom_point(data = predData, aes(x = Status_Tid, y = gen, col = paste("predicted")), size = 3)
+          resTab_i <- resTab_i + 1
+          resTabAdj <- length(p) * summary(fit3)$coeff[1+ 1:(length(levels(d$Status_Tid))- 1),4]
+          resTabCoef <- round(summary(fit3)$coeff[1+ 1:(length(levels(d$Status_Tid))-1),1],3)
+          resTab[resTab_i, 1+ 1:(length(levels(d$Status_Tid))-1)] <- coeff_and_p(resTabAdj, resTabCoef)         
+          resTab[resTab_i, 1] <- colnames(d)[ii]
+          resTab[resTab_i, 8] <- round(with(summary(fit3), 1 - deviance/null.deviance),3)
+          
+     } else {
+       if(aic_values["fit6a", "AIC"] < (min_aic_values+2)){
+         fit <- fit6
+         predData <- expand.grid(Status_Tid_Sex = levels(d$Status_Tid_Sex))
+         predData$Sex <- "M"
+         predData$Sex[grep("F", predData$Status_Tid_Sex)] <- "F"
+
+         pred <- predict(fit, newdata = predData, type = "response", se.fit = TRUE)
+         predData$predict <- pred$fit
+         predData$pred_lower <- (pred$fit - 1.96*pred$se.fit)
+         predData$pred_upper <- (pred$fit + 1.96*pred$se.fit)
+           predData$pred_lower[predData$pred_lower < 7.64] <- 7.64
+           predData$pred_lower[predData$pred_lower < 7.64] <- 7.64
+          predData$predict[predData$predict < 7.64] <- 7.64
+  
+           predData$gen <- predData$predict
+           predData <- data.frame(predData)
+        
+          
+         i_Status_Tid_Sex <- which(colnames(d) == "Status_Tid_Sex")
+         i_Sex <- which(colnames(d) == "Sex")
+         i_gen <- ii
+         d2 <- d[,c(i_gen, i_Status_Tid_Sex, i_Sex)]  
+         colnames(d2) <- c("gen", "Status_Tid_Sex", "Sex")
+          g <- ggplot(d2 , aes(x = Status_Tid_Sex, y = gen, col = Sex)) +
+               geom_boxplot(outlier.shape = NA) + 
+               geom_jitter(size = 2, alpha=0.3, position=position_jitter(0.2)) +
+               geom_errorbar(data = predData, aes(ymin = pred_lower, ymax = pred_upper, col =  paste("predicted")), width = 0.2, position = position_dodge(0.9)) + 
+               geom_point(data = predData, aes(x = Status_Tid_Sex, y = gen, col = paste("predicted")), size = 3) 
+          
+          
+          resTab_i <- resTab_i + 1
+          resTabAdj <- length(p) * summary(fit6a)$coeff[1+ 1:(length(levels(d$Status_Tid)) -1 + 1),4]
+          resTabCoef <- round(summary(fit6a)$coeff[1+ 1:(length(levels(d$Status_Tid)) -1 + 1),1],3)
+          resTab[resTab_i, c(1+ 1:(length(levels(d$Status_Tid)) -1), 1 + length(levels(d$Status_Tid)) -1 + 2)] <- coeff_and_p(resTabAdj, resTabCoef)         
+          resTab[resTab_i, 1] <- colnames(d)[ii]
+          resTab[resTab_i, 8] <- round(with(summary(fit6a), 1 - deviance/null.deviance),3)
+       }  else {
+         if(aic_values["fit5", "AIC"] < min_aic_values+2){
+           fit <- fit5
+           predData <- expand.grid(Age= min(d$Age):max(d$Age), Status_Tid = levels(d$Status_Tid))
+       
+           for(n in levels(d$Status_Tid)){
+              min_n <- min(d$Age[d$Status_Tid == n])
+              max_n <- max(d$Age[d$Status_Tid == n])
+              predData$Age[predData$Status_Tid == n & predData$Age > max_n] <- NA
+              predData$Age[predData$Status_Tid == n & predData$Age < min_n] <- NA
+           }
+           predData <- predData[!is.na(predData$Age),]
+
+           pred <- predict(fit, newdata = predData, type = "response", se.fit = TRUE)
+           predData$predict <- pred$fit
+           predData$pred_lower <- (pred$fit - 1.96*pred$se.fit)
+           predData$pred_upper <- (pred$fit + 1.96*pred$se.fit)
+            predData$pred_lower[predData$pred_lower < 7.64] <- 7.64
+          predData$predict[predData$predict < 7.64] <- 7.64
+  
+           predData$gen <- predData$predict
+           predData <- data.frame(predData)
+           predData$Age <- predData$Age
+           i_Age <- which(colnames(d) == "Age")
+           i_Age <- which(colnames(d) == "Age")
+           i_Status_Tid <- which(colnames(d) == "Status_Tid")
+           i_gen = ii
+           d2 <- d[,c(i_gen, i_Age, i_Status_Tid)]  
+           colnames(d2) <- c("gen", "Age", "Status_Tid")
+           g <- ggplot(data = d2, aes(x = Age, y = gen, col= Status_Tid)) +
+              geom_point(size = 2) + 
+              geom_line(data = predData, aes(x=Age, y = gen, col = Status_Tid), size = 2) + 
+             geom_ribbon(data = predData, aes(ymin = pred_lower, ymax = pred_upper, fill = Status_Tid, color = NULL), alpha = 0.1)
+           
+          resTab_i <- resTab_i + 1
+          resTabAdj <- length(p) * summary(fit5)$coeff[1+ 1:(length(levels(d$Status_Tid)) - 1 + 1),4]
+          resTabCoef <- round(summary(fit5)$coeff[1+ 1:(length(levels(d$Status_Tid)) -1 + 1),1],3)
+          resTab[resTab_i, 1+ 1:(length(levels(d$Status_Tid)) - 1 + 1)] <- coeff_and_p(resTabAdj, resTabCoef)         
+          resTab[resTab_i, 1] <- colnames(d)[ii]
+           resTab[resTab_i, 8] <- round(with(summary(fit5), 1 - deviance/null.deviance),3)
+          }  else {
+           if(aic_values["fit7", "AIC"] < min_aic_values+2){
+             fit <- fit7
+             predData <- expand.grid(Age= min(d$Age):max(d$Age), Status_Tid_Sex = levels(d$Status_Tid_Sex))
+             predData$Sex <- "M"
+              predData$Sex[grep("F", predData$Status_Tid_Sex)] <- "F"
+
+             for(n in levels(d$Status_Tid_Sex)){
+              min_n <- min(d$Age[d$Status_Tid_Sex == n])
+              max_n <- max(d$Age[d$Status_Tid_Sex == n])
+              predData$Age[predData$Status_Tid_Sex == n & predData$Age > max_n] <- NA
+              predData$Age[predData$Status_Tid_Sex == n & predData$Age < min_n] <- NA
+           }
+           predData <- predData[!is.na(predData$Age),]
+
+           pred <- predict(fit, newdata = predData, type = "response", se.fit = TRUE)
+           predData$predict <- pred$fit
+           predData$pred_lower <- (pred$fit - 1.96*pred$se.fit)
+           predData$pred_upper <- (pred$fit + 1.96*pred$se.fit)
+           predData$pred_lower[predData$pred_lower < 7.64] <- 7.64
+          predData$predict[predData$predict < 7.64] <- 7.64
+  
+           predData$gen <- predData$predict
+           predData <- data.frame(predData)
+           predData$Age <- predData$Age
+           i_Age <- which(colnames(d) == "Age")
+           i_Status_Tid_Sex <- which(colnames(d) == "Status_Tid_Sex")
+           i_gen <- ii
+           d2 <- d[,c(i_gen, i_Age, i_Status_Tid_Sex)]  
+           colnames(d2) <- c("gen", "Age", "Status_Tid_Sex")
+           g <- ggplot(data = d2, aes(x = Age, y = gen, col= Status_Tid_Sex)) +
+              geom_point(size = 2) + 
+              geom_line(data = predData, aes(x=Age, y = gen, col = Status_Tid_Sex), size = 2) + 
+             geom_ribbon(data = predData, aes(ymin = pred_lower, ymax = pred_upper, fill = Status_Tid_Sex, color = NULL), alpha = 0.1)
+           
+          resTab_i <- resTab_i + 1
+          resTabAdj <- length(p) * summary(fit7a)$coeff[1+ 1:(length(levels(d$Status_Tid)) - 1 + 2),4]
+          resTabCoef <- round(summary(fit7a)$coeff[1+ 1:(length(levels(d$Status_Tid)) -1 + 2),1],3)
+          resTab[resTab_i, 1+ 1:(length(levels(d$Status_Tid)) - 1 + 2)] <- coeff_and_p(resTabAdj, resTabCoef)         
+          resTab[resTab_i, 1] <- colnames(d)[ii]
+          resTab[resTab_i, 8] <- round(with(summary(fit7a), 1 - deviance/null.deviance),3)
+           
+           }
+      
+          }
+       }
+     }
+
+   if(exists("g")){
+     print("########")
+    print(colnames(d)[ii])
+    print(summary(fit))
+    print(paste0("adj.p for moderat er: ", adj_p[mulige_gener_i[i]]))
+  
+    g <- g + theme(axis.text = element_text(size = 14), axis.title = element_text(size = 20), title  = element_text(size = 20)) + 
+    ylab("gen") 
+    g <- g + ggtitle(paste0(colnames(d)[ii]))
+    print(g)
+    d_resid <- data.frame(fitted = fitted(fit), residuals = residuals(fit), Status_Tid = d$Status_Tid) 
+    
+    g_resid <- ggplot(d_resid, aes(x = fitted, y = residuals, col = Status_Tid)) +
+       geom_jitter(position=position_jitter(0.02)) + ggtitle("residual plot") + geom_abline(slope = 0, intercept = 0) + theme(axis.text = element_text(size = 14), axis.title = element_text(size = 20), title  = element_text(size = 20))
+    print(g_resid)
+   
+   
+   }
+}
+}
+
+if(!is.null(params$utFil)){
+  write.csv2(resTab[1:resTab_i,], fs::path(params$utSti, params$utFil) )
+}
+```
+
+
